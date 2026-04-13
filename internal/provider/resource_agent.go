@@ -2,6 +2,7 @@ package provider
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 
@@ -9,8 +10,12 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
-	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	resourceschema "github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/boolplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
@@ -62,20 +67,6 @@ type toolConfigModel struct {
 	Name             types.String `tfsdk:"name"`
 	Enabled          types.Bool   `tfsdk:"enabled"`
 	PermissionPolicy types.String `tfsdk:"permission_policy"`
-}
-
-type agentAPIModel struct {
-	ID          string            `json:"id"`
-	Name        string            `json:"name"`
-	Description string            `json:"description,omitempty"`
-	System      string            `json:"system,omitempty"`
-	Metadata    map[string]string `json:"metadata,omitempty"`
-	Model       any               `json:"model,omitempty"`
-	MCPServers  []map[string]any  `json:"mcp_servers,omitempty"`
-	Skills      []map[string]any  `json:"skills,omitempty"`
-	Tools       []map[string]any  `json:"tools,omitempty"`
-	Version     int64             `json:"version,omitempty"`
-	ArchivedAt  *string           `json:"archived_at,omitempty"`
 }
 
 var _ resource.Resource = (*agentResource)(nil)
@@ -144,7 +135,10 @@ func (r *agentResource) Schema(_ context.Context, _ resource.SchemaRequest, resp
 	resp.Schema = resourceschema.Schema{
 		Description: "Managed agent configuration.",
 		Attributes: map[string]resourceschema.Attribute{
-			"id":          resourceschema.StringAttribute{Computed: true},
+			"id": resourceschema.StringAttribute{
+				Computed: true,
+				PlanModifiers: []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
+			},
 			"name":        resourceschema.StringAttribute{Required: true},
 			"description": resourceschema.StringAttribute{Optional: true},
 			"model_id":    resourceschema.StringAttribute{Required: true, Description: "Model identifier, e.g. claude-sonnet-4-6."},
@@ -153,11 +147,18 @@ func (r *agentResource) Schema(_ context.Context, _ resource.SchemaRequest, resp
 				Computed:    true,
 				Description: "Model speed: standard or fast.",
 				Validators:  []validator.String{stringvalidator.OneOf("standard", "fast")},
+				PlanModifiers: []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
 			},
 			"system":      resourceschema.StringAttribute{Optional: true, Description: "System prompt (up to 100,000 chars)."},
 			"metadata":    resourceschema.MapAttribute{Optional: true, ElementType: types.StringType},
-			"version":     resourceschema.Int64Attribute{Computed: true},
-			"archived":    resourceschema.BoolAttribute{Computed: true},
+			"version": resourceschema.Int64Attribute{
+				Computed: true,
+				PlanModifiers: []planmodifier.Int64{int64planmodifier.UseStateForUnknown()},
+			},
+			"archived": resourceschema.BoolAttribute{
+				Computed: true,
+				PlanModifiers: []planmodifier.Bool{boolplanmodifier.UseStateForUnknown()},
+			},
 			"mcp_servers": resourceschema.ListNestedAttribute{
 				Optional:    true,
 				Description: "MCP server configurations (max 20).",
@@ -322,7 +323,6 @@ func (r *agentResource) Read(ctx context.Context, req resource.ReadRequest, resp
 	if err := r.client.Get(ctx, fmt.Sprintf("/v1/agents/%s", state.ID.ValueString()), &api); err != nil {
 		var nfe *NotFoundError
 		if errors.As(err, &nfe) {
-			// Resource was deleted outside Terraform; remove from state.
 			resp.State.RemoveResource(ctx)
 			return
 		}
@@ -346,13 +346,9 @@ func (r *agentResource) Update(ctx context.Context, req resource.UpdateRequest, 
 		return
 	}
 
-	// Fetch current version for optimistic concurrency; the API rejects stale versions.
-	var current agentAPIModel
-	if err := r.client.Get(ctx, fmt.Sprintf("/v1/agents/%s", state.ID.ValueString()), &current); err != nil {
-		resp.Diagnostics.AddError("Get agent before update failed", err.Error())
-		return
-	}
-	plan.Version = types.Int64Value(current.Version)
+	// Use version from state for optimistic concurrency; the API rejects stale versions,
+	// surfacing concurrent modifications as errors rather than silently overwriting them.
+	plan.Version = state.Version
 
 	payload, diags := buildAgentPayload(ctx, plan, true)
 	resp.Diagnostics.Append(diags...)
@@ -378,8 +374,10 @@ func (r *agentResource) Delete(ctx context.Context, req resource.DeleteRequest, 
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	if err := r.client.Post(ctx, fmt.Sprintf("/v1/agents/%s/archive", state.ID.ValueString()), map[string]any{}, nil); err != nil {
-		resp.Diagnostics.AddError("Archive agent failed", err.Error())
+	// Agents only support archival, not hard-delete via the API.
+	err := r.client.Post(ctx, fmt.Sprintf("/v1/agents/%s/archive", state.ID.ValueString()), map[string]any{}, nil)
+	if err != nil {
+		resp.Diagnostics.AddError("Delete agent failed", err.Error())
 	}
 }
 
@@ -387,129 +385,108 @@ func (r *agentResource) ImportState(ctx context.Context, req resource.ImportStat
 	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
 }
 
-func buildAgentPayload(ctx context.Context, plan agentResourceModel, includeVersion bool) (map[string]any, diag.Diagnostics) {
+func buildAgentPayload(ctx context.Context, plan agentResourceModel, includeVersion bool) (agentRequestPayload, diag.Diagnostics) {
 	var diags diag.Diagnostics
 	meta, d := mapFromTF(ctx, plan.Metadata)
 	diags.Append(d...)
 
-	payload := map[string]any{
-		"name":  plan.Name.ValueString(),
-		"model": plan.ModelID.ValueString(),
+	payload := agentRequestPayload{
+		Name:     plan.Name.ValueString(),
+		Metadata: meta,
+		Model:    agentModelField{ID: plan.ModelID.ValueString()},
 	}
 	if !plan.ModelSpeed.IsNull() && !plan.ModelSpeed.IsUnknown() && plan.ModelSpeed.ValueString() != "" {
-		payload["model"] = map[string]any{
-			"id":    plan.ModelID.ValueString(),
-			"speed": plan.ModelSpeed.ValueString(),
-		}
+		payload.Model.Speed = plan.ModelSpeed.ValueString()
 	}
 	if includeVersion {
-		payload["version"] = plan.Version.ValueInt64()
+		v := plan.Version.ValueInt64()
+		payload.Version = &v
 	}
 	if !plan.Description.IsNull() && !plan.Description.IsUnknown() {
-		payload["description"] = plan.Description.ValueString()
+		payload.Description = plan.Description.ValueString()
 	}
 	if !plan.System.IsNull() && !plan.System.IsUnknown() {
-		payload["system"] = plan.System.ValueString()
-	}
-	if len(meta) > 0 {
-		payload["metadata"] = meta
+		payload.System = plan.System.ValueString()
 	}
 
 	if !plan.MCPServers.IsNull() && !plan.MCPServers.IsUnknown() {
 		var servers []mcpServerModel
 		diags.Append(plan.MCPServers.ElementsAs(ctx, &servers, false)...)
-		var apiServers []map[string]any
 		for _, s := range servers {
-			apiServers = append(apiServers, map[string]any{
-				"name": s.Name.ValueString(),
-				"type": s.Type.ValueString(),
-				"url":  s.URL.ValueString(),
+			payload.MCPServers = append(payload.MCPServers, mcpServerAPI{
+				Name: s.Name.ValueString(),
+				Type: s.Type.ValueString(),
+				URL:  s.URL.ValueString(),
 			})
-		}
-		if len(apiServers) > 0 {
-			payload["mcp_servers"] = apiServers
 		}
 	}
 
 	if !plan.Skills.IsNull() && !plan.Skills.IsUnknown() {
 		var skills []skillModel
 		diags.Append(plan.Skills.ElementsAs(ctx, &skills, false)...)
-		var apiSkills []map[string]any
 		for _, s := range skills {
-			sk := map[string]any{
-				"type":     s.Type.ValueString(),
-				"skill_id": s.SkillID.ValueString(),
+			sk := skillAPI{
+				Type:    s.Type.ValueString(),
+				SkillID: s.SkillID.ValueString(),
 			}
 			if !s.Version.IsNull() && !s.Version.IsUnknown() {
-				sk["version"] = s.Version.ValueString()
+				sk.Version = s.Version.ValueString()
 			}
-			apiSkills = append(apiSkills, sk)
-		}
-		if len(apiSkills) > 0 {
-			payload["skills"] = apiSkills
+			payload.Skills = append(payload.Skills, sk)
 		}
 	}
 
 	if !plan.Tools.IsNull() && !plan.Tools.IsUnknown() {
 		var tools []toolModel
 		diags.Append(plan.Tools.ElementsAs(ctx, &tools, false)...)
-		var apiTools []map[string]any
 		for _, t := range tools {
-			tool := map[string]any{
-				"type": t.Type.ValueString(),
+			tool := toolAPI{
+				Type: t.Type.ValueString(),
 			}
 			if !t.Name.IsNull() && !t.Name.IsUnknown() {
-				tool["name"] = t.Name.ValueString()
+				tool.Name = t.Name.ValueString()
 			}
 			if !t.Description.IsNull() && !t.Description.IsUnknown() {
-				tool["description"] = t.Description.ValueString()
+				tool.Description = t.Description.ValueString()
 			}
-			if !t.InputSchema.IsNull() && !t.InputSchema.IsUnknown() {
-				var schema map[string]any
-				diags.Append(parseJSONOrNull(t.InputSchema, &schema)...)
-				if schema != nil {
-					tool["input_schema"] = schema
-				}
+			if !t.InputSchema.IsNull() && !t.InputSchema.IsUnknown() && t.InputSchema.ValueString() != "" {
+				tool.InputSchema = json.RawMessage(t.InputSchema.ValueString())
 			}
 			if !t.MCPServerName.IsNull() && !t.MCPServerName.IsUnknown() {
-				tool["mcp_server_name"] = t.MCPServerName.ValueString()
+				tool.MCPServerName = t.MCPServerName.ValueString()
 			}
 			if !t.DefaultConfig.IsNull() && !t.DefaultConfig.IsUnknown() {
 				var dc toolConfigModel
 				diags.Append(t.DefaultConfig.As(ctx, &dc, basetypes.ObjectAsOptions{})...)
-				tool["default_config"] = expandToolConfig(dc)
+				cfg := expandToolConfig(dc)
+				tool.DefaultConfig = &cfg
 			}
 			if !t.Configs.IsNull() && !t.Configs.IsUnknown() {
 				var configs []toolConfigModel
 				diags.Append(t.Configs.ElementsAs(ctx, &configs, false)...)
-				var apiConfigs []map[string]any
 				for _, c := range configs {
-					apiConfigs = append(apiConfigs, expandToolConfig(c))
+					tool.Configs = append(tool.Configs, expandToolConfig(c))
 				}
-				tool["configs"] = apiConfigs
 			}
-			apiTools = append(apiTools, tool)
-		}
-		if len(apiTools) > 0 {
-			payload["tools"] = apiTools
+			payload.Tools = append(payload.Tools, tool)
 		}
 	}
 	return payload, diags
 }
 
-func expandToolConfig(c toolConfigModel) map[string]any {
-	m := map[string]any{}
+func expandToolConfig(c toolConfigModel) toolConfigAPI {
+	cfg := toolConfigAPI{}
 	if !c.Name.IsNull() && !c.Name.IsUnknown() {
-		m["name"] = c.Name.ValueString()
+		cfg.Name = c.Name.ValueString()
 	}
 	if !c.Enabled.IsNull() && !c.Enabled.IsUnknown() {
-		m["enabled"] = c.Enabled.ValueBool()
+		v := c.Enabled.ValueBool()
+		cfg.Enabled = &v
 	}
 	if !c.PermissionPolicy.IsNull() && !c.PermissionPolicy.IsUnknown() {
-		// API expects permission_policy as {"type": "always_allow"}; TF schema exposes it as a flat string for cleaner HCL.
-		m["permission_policy"] = map[string]any{"type": c.PermissionPolicy.ValueString()}
+		cfg.PermissionPolicy = &permissionPolicyAPI{Type: c.PermissionPolicy.ValueString()}
 	}
-	return m
+	return cfg
 }
 
 func flattenAgentState(ctx context.Context, api agentAPIModel) (agentResourceModel, diag.Diagnostics) {
@@ -521,11 +498,12 @@ func flattenAgentState(ctx context.Context, api agentAPIModel) (agentResourceMod
 		System:      stringOrNull(api.System),
 		Version:     types.Int64Value(api.Version),
 		Archived:    types.BoolValue(api.ArchivedAt != nil),
+		ModelID:     types.StringValue(api.Model.ID),
+		ModelSpeed:  stringOrNull(api.Model.Speed),
 	}
 	meta, d := mapToTF(ctx, api.Metadata)
 	diags.Append(d...)
 	state.Metadata = meta
-	state.ModelID, state.ModelSpeed = flattenModel(api.Model)
 
 	mcpElemType := types.ObjectType{AttrTypes: mcpServerAttrTypes()}
 	if len(api.MCPServers) == 0 {
@@ -534,9 +512,9 @@ func flattenAgentState(ctx context.Context, api agentAPIModel) (agentResourceMod
 		var vals []attr.Value
 		for _, s := range api.MCPServers {
 			obj, d := types.ObjectValue(mcpServerAttrTypes(), map[string]attr.Value{
-				"name": stringOrNull(anyString(s["name"])),
-				"type": stringOrNull(anyString(s["type"])),
-				"url":  stringOrNull(anyString(s["url"])),
+				"name": stringOrNull(s.Name),
+				"type": stringOrNull(s.Type),
+				"url":  stringOrNull(s.URL),
 			})
 			diags.Append(d...)
 			vals = append(vals, obj)
@@ -553,9 +531,9 @@ func flattenAgentState(ctx context.Context, api agentAPIModel) (agentResourceMod
 		var vals []attr.Value
 		for _, s := range api.Skills {
 			obj, d := types.ObjectValue(skillAttrTypes(), map[string]attr.Value{
-				"type":     stringOrNull(anyString(s["type"])),
-				"skill_id": stringOrNull(anyString(s["skill_id"])),
-				"version":  stringOrNull(anyString(s["version"])),
+				"type":     stringOrNull(s.Type),
+				"skill_id": stringOrNull(s.SkillID),
+				"version":  stringOrNull(s.Version),
 			})
 			diags.Append(d...)
 			vals = append(vals, obj)
@@ -581,47 +559,40 @@ func flattenAgentState(ctx context.Context, api agentAPIModel) (agentResourceMod
 	return state, diags
 }
 
-func flattenTool(t map[string]any, diags *diag.Diagnostics) attr.Value {
+func flattenTool(t toolAPI, diags *diag.Diagnostics) attr.Value {
 	dcObj := types.ObjectNull(toolConfigAttrTypes())
-	if dc, ok := t["default_config"].(map[string]any); ok {
+	if t.DefaultConfig != nil {
 		var d diag.Diagnostics
-		dcObj, d = flattenToolConfigObj(dc)
+		dcObj, d = flattenToolConfigObj(*t.DefaultConfig)
 		*diags = append(*diags, d...)
 	}
 
-	configListType := types.ListType{ElemType: types.ObjectType{AttrTypes: toolConfigAttrTypes()}}
 	configsList := types.ListNull(types.ObjectType{AttrTypes: toolConfigAttrTypes()})
-	if cfgs, ok := t["configs"].([]any); ok && len(cfgs) > 0 {
+	if len(t.Configs) > 0 {
 		var configVals []attr.Value
-		for _, c := range cfgs {
-			cm, _ := c.(map[string]any)
-			if cm == nil {
-				continue
-			}
-			obj, d := flattenToolConfigObj(cm)
+		for _, c := range t.Configs {
+			obj, d := flattenToolConfigObj(c)
 			*diags = append(*diags, d...)
 			configVals = append(configVals, obj)
 		}
 		if len(configVals) > 0 {
 			var d diag.Diagnostics
-			configsList, d = types.ListValue(configListType.ElemType, configVals)
+			configsList, d = types.ListValue(types.ObjectType{AttrTypes: toolConfigAttrTypes()}, configVals)
 			*diags = append(*diags, d...)
 		}
 	}
 
 	inputSchema := types.StringNull()
-	if is, ok := t["input_schema"]; ok && is != nil {
-		var d diag.Diagnostics
-		inputSchema, d = mustJSON(is)
-		*diags = append(*diags, d...)
+	if len(t.InputSchema) > 0 {
+		inputSchema = types.StringValue(string(t.InputSchema))
 	}
 
 	obj, d := types.ObjectValue(toolAttrTypes(), map[string]attr.Value{
-		"type":            stringOrNull(anyString(t["type"])),
-		"name":            stringOrNull(anyString(t["name"])),
-		"description":     stringOrNull(anyString(t["description"])),
+		"type":            stringOrNull(t.Type),
+		"name":            stringOrNull(t.Name),
+		"description":     stringOrNull(t.Description),
 		"input_schema":    inputSchema,
-		"mcp_server_name": stringOrNull(anyString(t["mcp_server_name"])),
+		"mcp_server_name": stringOrNull(t.MCPServerName),
 		"default_config":  dcObj,
 		"configs":         configsList,
 	})
@@ -629,33 +600,18 @@ func flattenTool(t map[string]any, diags *diag.Diagnostics) attr.Value {
 	return obj
 }
 
-func flattenToolConfigObj(m map[string]any) (types.Object, diag.Diagnostics) {
+func flattenToolConfigObj(c toolConfigAPI) (types.Object, diag.Diagnostics) {
 	enabled := types.BoolNull()
-	if v, ok := m["enabled"]; ok {
-		enabled = types.BoolValue(anyBool(v))
+	if c.Enabled != nil {
+		enabled = types.BoolValue(*c.Enabled)
 	}
-	// Unwrap the API's {"type": "..."} envelope back to a flat string for TF state.
 	pp := types.StringNull()
-	if ppObj, ok := m["permission_policy"].(map[string]any); ok {
-		pp = stringOrNull(anyString(ppObj["type"]))
-	} else if ppStr, ok := m["permission_policy"].(string); ok {
-		pp = stringOrNull(ppStr)
+	if c.PermissionPolicy != nil {
+		pp = stringOrNull(c.PermissionPolicy.Type)
 	}
 	return types.ObjectValue(toolConfigAttrTypes(), map[string]attr.Value{
-		"name":              stringOrNull(anyString(m["name"])),
+		"name":              stringOrNull(c.Name),
 		"enabled":           enabled,
 		"permission_policy": pp,
 	})
-}
-
-func flattenModel(v any) (types.String, types.String) {
-	s, ok := v.(string)
-	if ok {
-		return types.StringValue(s), types.StringNull()
-	}
-	m, ok := v.(map[string]any)
-	if !ok {
-		return types.StringNull(), types.StringNull()
-	}
-	return stringOrNull(anyString(m["id"])), stringOrNull(anyString(m["speed"]))
 }
