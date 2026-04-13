@@ -154,6 +154,9 @@ func (c *Client) do(ctx context.Context, method, path string, payload any, out a
 				return nil
 			}
 			if err := json.Unmarshal(respBytes, out); err != nil {
+				if int64(len(respBytes)) >= maxResponseBytes {
+					return fmt.Errorf("unmarshal response (possibly truncated at %d bytes): %w", maxResponseBytes, err)
+				}
 				return fmt.Errorf("unmarshal response: %w; body=%s", err, string(respBytes))
 			}
 			return nil
