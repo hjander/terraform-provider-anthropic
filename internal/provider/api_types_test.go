@@ -6,56 +6,67 @@ import (
 )
 
 func TestEnvironmentNetworkingAPI_BooleanFalsePreserved(t *testing.T) {
-	n := environmentNetworkingAPI{
+	f := false
+	net := environmentNetworkingAPI{
 		Type:                 "limited",
-		AllowMCPServers:      false,
-		AllowPackageManagers: false,
+		AllowMCPServers:      &f,
+		AllowPackageManagers: &f,
 	}
-
-	data, err := json.Marshal(n)
+	data, err := json.Marshal(net)
 	if err != nil {
-		t.Fatalf("unexpected marshal error: %v", err)
+		t.Fatalf("marshal: %v", err)
 	}
-
-	var m map[string]any
-	if err := json.Unmarshal(data, &m); err != nil {
-		t.Fatalf("unexpected unmarshal error: %v", err)
+	var raw map[string]any
+	if err := json.Unmarshal(data, &raw); err != nil {
+		t.Fatalf("unmarshal: %v", err)
 	}
-
-	if _, ok := m["allow_mcp_servers"]; !ok {
-		t.Errorf("expected key 'allow_mcp_servers' to be present in JSON when set to false, but it was omitted")
+	if _, ok := raw["allow_mcp_servers"]; !ok {
+		t.Error("allow_mcp_servers=false was omitted from JSON; expected it to be present")
 	}
-	if _, ok := m["allow_package_managers"]; !ok {
-		t.Errorf("expected key 'allow_package_managers' to be present in JSON when set to false, but it was omitted")
+	if _, ok := raw["allow_package_managers"]; !ok {
+		t.Error("allow_package_managers=false was omitted from JSON; expected it to be present")
 	}
 }
 
 func TestEnvironmentNetworkingAPI_BooleanTruePreserved(t *testing.T) {
-	n := environmentNetworkingAPI{
+	tr := true
+	net := environmentNetworkingAPI{
 		Type:                 "limited",
-		AllowMCPServers:      true,
-		AllowPackageManagers: true,
+		AllowMCPServers:      &tr,
+		AllowPackageManagers: &tr,
 	}
-
-	data, err := json.Marshal(n)
+	data, err := json.Marshal(net)
 	if err != nil {
-		t.Fatalf("unexpected marshal error: %v", err)
+		t.Fatalf("marshal: %v", err)
 	}
-
-	var m map[string]any
-	if err := json.Unmarshal(data, &m); err != nil {
-		t.Fatalf("unexpected unmarshal error: %v", err)
+	var raw map[string]any
+	if err := json.Unmarshal(data, &raw); err != nil {
+		t.Fatalf("unmarshal: %v", err)
 	}
-
-	if v, ok := m["allow_mcp_servers"]; !ok {
-		t.Errorf("expected key 'allow_mcp_servers' to be present in JSON when set to true, but it was omitted")
-	} else if v != true {
-		t.Errorf("expected 'allow_mcp_servers' to be true, got %v", v)
+	if v, ok := raw["allow_mcp_servers"]; !ok || v != true {
+		t.Errorf("allow_mcp_servers: got %v, want true", v)
 	}
+	if v, ok := raw["allow_package_managers"]; !ok || v != true {
+		t.Errorf("allow_package_managers: got %v, want true", v)
+	}
+}
 
-	if v, ok := m["allow_package_managers"]; !ok {
-		t.Errorf("expected key 'allow_package_managers' to be present in JSON when set to true, but it was omitted")
-	} else if v != true {
-		t.Errorf("expected 'allow_package_managers' to be true, got %v", v)
+func TestEnvironmentNetworkingAPI_NilBoolsOmitted(t *testing.T) {
+	net := environmentNetworkingAPI{
+		Type: "unrestricted",
+	}
+	data, err := json.Marshal(net)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	var raw map[string]any
+	if err := json.Unmarshal(data, &raw); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if _, ok := raw["allow_mcp_servers"]; ok {
+		t.Error("allow_mcp_servers should be omitted for unrestricted type")
+	}
+	if _, ok := raw["allow_package_managers"]; ok {
+		t.Error("allow_package_managers should be omitted for unrestricted type")
 	}
 }

@@ -99,8 +99,8 @@ type agentRequestPayload struct {
 
 type environmentNetworkingAPI struct {
 	Type                 string   `json:"type"`
-	AllowMCPServers      bool     `json:"allow_mcp_servers"`
-	AllowPackageManagers bool     `json:"allow_package_managers"`
+	AllowMCPServers      *bool    `json:"allow_mcp_servers,omitempty"`
+	AllowPackageManagers *bool    `json:"allow_package_managers,omitempty"`
 	AllowedHosts         []string `json:"allowed_hosts,omitempty"`
 }
 

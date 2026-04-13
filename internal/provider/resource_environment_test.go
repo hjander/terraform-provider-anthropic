@@ -8,6 +8,8 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
+func boolPtr(b bool) *bool { return &b }
+
 func TestExpandEnvironmentPayload_Minimal(t *testing.T) {
 	ctx := context.Background()
 
@@ -94,8 +96,8 @@ func TestFlattenEnvironmentState_WithPackages(t *testing.T) {
 			Type: "cloud",
 			Networking: environmentNetworkingAPI{
 				Type:                 "limited",
-				AllowMCPServers:      true,
-				AllowPackageManagers: true,
+				AllowMCPServers:      boolPtr(true),
+				AllowPackageManagers: boolPtr(true),
 				AllowedHosts:         []string{"pypi.org"},
 			},
 			Packages: &environmentPackagesAPI{

@@ -289,8 +289,10 @@ func expandEnvironmentPayload(ctx context.Context, plan environmentResourceModel
 		Type: net.Type.ValueString(),
 	}
 	if net.Type.ValueString() == "limited" {
-		netAPI.AllowMCPServers = !net.AllowMCPServers.IsNull() && net.AllowMCPServers.ValueBool()
-		netAPI.AllowPackageManagers = !net.AllowPackageManagers.IsNull() && net.AllowPackageManagers.ValueBool()
+		ams := !net.AllowMCPServers.IsNull() && net.AllowMCPServers.ValueBool()
+		apm := !net.AllowPackageManagers.IsNull() && net.AllowPackageManagers.ValueBool()
+		netAPI.AllowMCPServers = &ams
+		netAPI.AllowPackageManagers = &apm
 		netAPI.AllowedHosts = allowedHosts
 	}
 
@@ -359,10 +361,19 @@ func environmentConfigObjectFromAPI(ctx context.Context, cfg *environmentConfigA
 	allowedHosts, d := sliceToSetTF(ctx, cfg.Networking.AllowedHosts)
 	diags.Append(d...)
 
+	allowMCP := types.BoolValue(false)
+	if cfg.Networking.AllowMCPServers != nil {
+		allowMCP = types.BoolValue(*cfg.Networking.AllowMCPServers)
+	}
+	allowPM := types.BoolValue(false)
+	if cfg.Networking.AllowPackageManagers != nil {
+		allowPM = types.BoolValue(*cfg.Networking.AllowPackageManagers)
+	}
+
 	netObj, d := types.ObjectValue(environmentNetworkingAttrTypes(), map[string]attr.Value{
 		"type":                   stringOrNull(cfg.Networking.Type),
-		"allow_mcp_servers":      types.BoolValue(cfg.Networking.AllowMCPServers),
-		"allow_package_managers": types.BoolValue(cfg.Networking.AllowPackageManagers),
+		"allow_mcp_servers":      allowMCP,
+		"allow_package_managers": allowPM,
 		"allowed_hosts":          allowedHosts,
 	})
 	diags.Append(d...)
