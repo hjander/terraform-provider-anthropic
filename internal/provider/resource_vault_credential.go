@@ -299,12 +299,28 @@ func expandCredentialAuth(ctx context.Context, obj types.Object, diags *diag.Dia
 
 func flattenCredentialState(ctx context.Context, prior vaultCredentialResourceModel, api credentialAPIModel) (vaultCredentialResourceModel, diag.Diagnostics) {
 	var diags diag.Diagnostics
+
+	// API does not echo back secrets; preserve auth from prior state to avoid perpetual diff.
+	// After import, prior.Auth is null — build a partial auth object from the API response
+	// so the resource state is not completely empty.
+	auth := prior.Auth
+	if auth.IsNull() || auth.IsUnknown() {
+		refreshObj := types.ObjectNull(credentialRefreshAttrTypes())
+		var d diag.Diagnostics
+		auth, d = types.ObjectValue(credentialAuthAttrTypes(), map[string]attr.Value{
+			"type":           stringOrNull(api.Auth.Type),
+			"mcp_server_url": stringOrNull(api.Auth.MCPServerURL),
+			"access_token":   types.StringNull(), // Not returned by API
+			"refresh":        refreshObj,
+		})
+		diags.Append(d...)
+	}
+
 	state := vaultCredentialResourceModel{
 		ID:             types.StringValue(api.ID),
 		VaultID:        prior.VaultID,
 		DisplayName:    stringOrNull(api.DisplayName),
-		// API does not echo back secrets; preserve auth from prior state to avoid perpetual diff.
-		Auth:           prior.Auth,
+		Auth:           auth,
 		Archived:       types.BoolValue(api.ArchivedAt != nil),
 		CredentialType: stringOrNull(api.Auth.Type),
 	}
