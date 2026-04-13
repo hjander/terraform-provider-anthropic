@@ -16,6 +16,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/boolplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/listplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/objectplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/setplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -116,17 +117,20 @@ func (r *environmentResource) Schema(_ context.Context, _ resource.SchemaRequest
 								Validators: []validator.String{stringvalidator.OneOf("unrestricted", "limited")},
 							},
 						"allow_mcp_servers": resourceschema.BoolAttribute{
-							Optional: true,
-							Computed: true,
+							Optional:      true,
+							Computed:      true,
+							PlanModifiers: []planmodifier.Bool{boolplanmodifier.UseStateForUnknown()},
 						},
 						"allow_package_managers": resourceschema.BoolAttribute{
-							Optional: true,
-							Computed: true,
+							Optional:      true,
+							Computed:      true,
+							PlanModifiers: []planmodifier.Bool{boolplanmodifier.UseStateForUnknown()},
 						},
 						"allowed_hosts": resourceschema.SetAttribute{
-							Optional:    true,
-							Computed:    true,
-							ElementType: types.StringType,
+							Optional:      true,
+							Computed:      true,
+							ElementType:   types.StringType,
+							PlanModifiers: []planmodifier.Set{setplanmodifier.UseStateForUnknown()},
 						},
 						},
 					},
