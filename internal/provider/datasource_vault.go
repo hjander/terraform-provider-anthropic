@@ -13,6 +13,13 @@ type vaultDataSource struct {
 	client *Client
 }
 
+type vaultDataSourceModel struct {
+	ID          types.String `tfsdk:"id"`
+	DisplayName types.String `tfsdk:"display_name"`
+	Metadata    types.Map    `tfsdk:"metadata"`
+	Archived    types.Bool   `tfsdk:"archived"`
+}
+
 var _ datasource.DataSource = (*vaultDataSource)(nil)
 
 func NewVaultDataSource() datasource.DataSource { return &vaultDataSource{} }
@@ -46,7 +53,7 @@ func (d *vaultDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, 
 }
 
 func (d *vaultDataSource) Read(ctx context.Context, req datasource.ReadRequest, resp *datasource.ReadResponse) {
-	var config vaultResourceModel
+	var config vaultDataSourceModel
 	resp.Diagnostics.Append(req.Config.Get(ctx, &config)...)
 	if resp.Diagnostics.HasError() {
 		return
@@ -58,7 +65,16 @@ func (d *vaultDataSource) Read(ctx context.Context, req datasource.ReadRequest, 
 		return
 	}
 
-	state, diags := flattenVaultState(ctx, api)
+	flat, diags := flattenVaultState(ctx, api)
 	resp.Diagnostics.Append(diags...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	state := vaultDataSourceModel{
+		ID:          flat.ID,
+		DisplayName: flat.DisplayName,
+		Metadata:    flat.Metadata,
+		Archived:    flat.Archived,
+	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
