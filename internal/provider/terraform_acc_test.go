@@ -1,12 +1,14 @@
 package provider
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"testing"
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
+	"github.com/hashicorp/terraform-plugin-testing/terraform"
 )
 
 func skipUnlessTerraformAcc(t *testing.T) {
@@ -18,6 +20,66 @@ func skipUnlessTerraformAcc(t *testing.T) {
 
 func testAccUniqueName(prefix string) string {
 	return fmt.Sprintf("%s-tfacc-%d", prefix, time.Now().UnixMilli())
+}
+
+func testAccCheckEnvironmentDestroy(s *terraform.State) error {
+	c := NewClient(ClientConfig{
+		BaseURL:           "https://api.anthropic.com",
+		APIKey:            os.Getenv("ANTHROPIC_API_KEY"),
+		AnthropicVersion:  defaultAnthropicVer,
+		ManagedAgentsBeta: defaultManagedAgents,
+	})
+	for _, rs := range s.RootModule().Resources {
+		if rs.Type != "anthropic_managed_environment" {
+			continue
+		}
+		var env environmentAPIModel
+		err := c.Get(context.Background(), fmt.Sprintf("/v1/environments/%s", rs.Primary.ID), &env)
+		if err == nil && env.ArchivedAt == nil {
+			return fmt.Errorf("environment %s still exists and is not archived", rs.Primary.ID)
+		}
+	}
+	return nil
+}
+
+func testAccCheckAgentDestroy(s *terraform.State) error {
+	c := NewClient(ClientConfig{
+		BaseURL:           "https://api.anthropic.com",
+		APIKey:            os.Getenv("ANTHROPIC_API_KEY"),
+		AnthropicVersion:  defaultAnthropicVer,
+		ManagedAgentsBeta: defaultManagedAgents,
+	})
+	for _, rs := range s.RootModule().Resources {
+		if rs.Type != "anthropic_managed_agent" {
+			continue
+		}
+		var agent agentAPIModel
+		err := c.Get(context.Background(), fmt.Sprintf("/v1/agents/%s", rs.Primary.ID), &agent)
+		if err == nil && agent.ArchivedAt == nil {
+			return fmt.Errorf("agent %s still exists and is not archived", rs.Primary.ID)
+		}
+	}
+	return nil
+}
+
+func testAccCheckVaultDestroy(s *terraform.State) error {
+	c := NewClient(ClientConfig{
+		BaseURL:           "https://api.anthropic.com",
+		APIKey:            os.Getenv("ANTHROPIC_API_KEY"),
+		AnthropicVersion:  defaultAnthropicVer,
+		ManagedAgentsBeta: defaultManagedAgents,
+	})
+	for _, rs := range s.RootModule().Resources {
+		if rs.Type != "anthropic_managed_vault" {
+			continue
+		}
+		var vault vaultAPIModel
+		err := c.Get(context.Background(), fmt.Sprintf("/v1/vaults/%s", rs.Primary.ID), &vault)
+		if err == nil && vault.ArchivedAt == nil {
+			return fmt.Errorf("vault %s still exists and is not archived", rs.Primary.ID)
+		}
+	}
+	return nil
 }
 
 // Terraform acceptance tests: these go through the full provider plan/apply lifecycle
@@ -32,6 +94,7 @@ func TestAccEnvironment_basic(t *testing.T) {
 
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckEnvironmentDestroy,
 		Steps: []resource.TestStep{
 			{
 				Config: fmt.Sprintf(`
@@ -86,6 +149,7 @@ func TestAccAgent_basic(t *testing.T) {
 
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckAgentDestroy,
 		Steps: []resource.TestStep{
 			{
 				Config: fmt.Sprintf(`
@@ -126,6 +190,7 @@ func TestAccAgent_withTools(t *testing.T) {
 
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckAgentDestroy,
 		Steps: []resource.TestStep{
 			{
 				Config: fmt.Sprintf(`
@@ -164,6 +229,7 @@ func TestAccVault_basic(t *testing.T) {
 
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckVaultDestroy,
 		Steps: []resource.TestStep{
 			{
 				Config: fmt.Sprintf(`
