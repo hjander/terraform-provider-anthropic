@@ -13,6 +13,15 @@ type environmentDataSource struct {
 	client *Client
 }
 
+type environmentDataSourceModel struct {
+	ID          types.String `tfsdk:"id"`
+	Name        types.String `tfsdk:"name"`
+	Description types.String `tfsdk:"description"`
+	Metadata    types.Map    `tfsdk:"metadata"`
+	Config      types.Object `tfsdk:"config"`
+	Archived    types.Bool   `tfsdk:"archived"`
+}
+
 var _ datasource.DataSource = (*environmentDataSource)(nil)
 
 func NewEnvironmentDataSource() datasource.DataSource { return &environmentDataSource{} }
@@ -74,7 +83,7 @@ func (d *environmentDataSource) Schema(_ context.Context, _ datasource.SchemaReq
 }
 
 func (d *environmentDataSource) Read(ctx context.Context, req datasource.ReadRequest, resp *datasource.ReadResponse) {
-	var config environmentResourceModel
+	var config environmentDataSourceModel
 	resp.Diagnostics.Append(req.Config.Get(ctx, &config)...)
 	if resp.Diagnostics.HasError() {
 		return
@@ -86,7 +95,18 @@ func (d *environmentDataSource) Read(ctx context.Context, req datasource.ReadReq
 		return
 	}
 
-	state, diags := flattenEnvironmentState(ctx, api)
+	flat, diags := flattenEnvironmentState(ctx, api)
 	resp.Diagnostics.Append(diags...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	state := environmentDataSourceModel{
+		ID:          flat.ID,
+		Name:        flat.Name,
+		Description: flat.Description,
+		Metadata:    flat.Metadata,
+		Config:      flat.Config,
+		Archived:    flat.Archived,
+	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
