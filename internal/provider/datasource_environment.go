@@ -7,6 +7,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	datasourceschema "github.com/hashicorp/terraform-plugin-framework/datasource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/hashicorp/terraform-plugin-log/tflog"
 )
 
 type environmentDataSource struct {
@@ -89,6 +90,7 @@ func (d *environmentDataSource) Read(ctx context.Context, req datasource.ReadReq
 		return
 	}
 
+	tflog.Debug(ctx, "reading environment data source", map[string]any{"id": config.ID.ValueString()})
 	var api environmentAPIModel
 	if err := d.client.Get(ctx, fmt.Sprintf("/v1/environments/%s", config.ID.ValueString()), &api); err != nil {
 		resp.Diagnostics.AddError("Read environment failed", err.Error())

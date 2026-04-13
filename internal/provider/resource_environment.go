@@ -10,6 +10,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
+	"github.com/hashicorp/terraform-plugin-log/tflog"
 	resourceschema "github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/boolplanmodifier"
@@ -163,6 +164,7 @@ func (r *environmentResource) Create(ctx context.Context, req resource.CreateReq
 		return
 	}
 
+	tflog.Debug(ctx, "creating environment", map[string]any{"name": plan.Name.ValueString()})
 	payload, diags := expandEnvironmentPayload(ctx, plan)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
@@ -174,6 +176,7 @@ func (r *environmentResource) Create(ctx context.Context, req resource.CreateReq
 		resp.Diagnostics.AddError("Create environment failed", err.Error())
 		return
 	}
+	tflog.Debug(ctx, "created environment", map[string]any{"id": api.ID})
 
 	state, diags := flattenEnvironmentState(ctx, api)
 	resp.Diagnostics.Append(diags...)
@@ -190,6 +193,7 @@ func (r *environmentResource) Read(ctx context.Context, req resource.ReadRequest
 		return
 	}
 
+	tflog.Debug(ctx, "reading environment", map[string]any{"id": state.ID.ValueString()})
 	var api environmentAPIModel
 	if err := r.client.Get(ctx, fmt.Sprintf("/v1/environments/%s", state.ID.ValueString()), &api); err != nil {
 		var nfe *NotFoundError
@@ -218,6 +222,7 @@ func (r *environmentResource) Update(ctx context.Context, req resource.UpdateReq
 		return
 	}
 
+	tflog.Debug(ctx, "updating environment", map[string]any{"id": state.ID.ValueString()})
 	payload, diags := expandEnvironmentPayload(ctx, plan)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
@@ -229,6 +234,7 @@ func (r *environmentResource) Update(ctx context.Context, req resource.UpdateReq
 		resp.Diagnostics.AddError("Update environment failed", err.Error())
 		return
 	}
+	tflog.Debug(ctx, "updated environment", map[string]any{"id": api.ID})
 
 	newState, diags := flattenEnvironmentState(ctx, api)
 	resp.Diagnostics.Append(diags...)
@@ -245,6 +251,7 @@ func (r *environmentResource) Delete(ctx context.Context, req resource.DeleteReq
 		return
 	}
 
+	tflog.Debug(ctx, "deleting environment", map[string]any{"id": state.ID.ValueString()})
 	var err error
 	if r.archiveOnDestroy {
 		err = r.client.Post(ctx, fmt.Sprintf("/v1/environments/%s/archive", state.ID.ValueString()), map[string]any{}, nil)

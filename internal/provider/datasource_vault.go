@@ -7,6 +7,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	datasourceschema "github.com/hashicorp/terraform-plugin-framework/datasource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/hashicorp/terraform-plugin-log/tflog"
 )
 
 type vaultDataSource struct {
@@ -59,6 +60,7 @@ func (d *vaultDataSource) Read(ctx context.Context, req datasource.ReadRequest, 
 		return
 	}
 
+	tflog.Debug(ctx, "reading vault data source", map[string]any{"id": config.ID.ValueString()})
 	var api vaultAPIModel
 	if err := d.client.Get(ctx, fmt.Sprintf("/v1/vaults/%s", config.ID.ValueString()), &api); err != nil {
 		resp.Diagnostics.AddError("Read vault failed", err.Error())

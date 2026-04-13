@@ -7,6 +7,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	datasourceschema "github.com/hashicorp/terraform-plugin-framework/datasource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/hashicorp/terraform-plugin-log/tflog"
 )
 
 type vaultCredentialDataSource struct {
@@ -63,6 +64,7 @@ func (d *vaultCredentialDataSource) Read(ctx context.Context, req datasource.Rea
 		return
 	}
 
+	tflog.Debug(ctx, "reading vault credential data source", map[string]any{"id": config.ID.ValueString()})
 	var api credentialAPIModel
 	if err := d.client.Get(ctx, fmt.Sprintf("/v1/vaults/%s/credentials/%s", config.VaultID.ValueString(), config.ID.ValueString()), &api); err != nil {
 		resp.Diagnostics.AddError("Read credential failed", err.Error())

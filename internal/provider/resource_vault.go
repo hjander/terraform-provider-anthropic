@@ -8,6 +8,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
+	"github.com/hashicorp/terraform-plugin-log/tflog"
 	resourceschema "github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
@@ -80,12 +81,14 @@ func (r *vaultResource) Create(ctx context.Context, req resource.CreateRequest, 
 	if resp.Diagnostics.HasError() {
 		return
 	}
+	tflog.Debug(ctx, "creating vault", map[string]any{"display_name": plan.DisplayName.ValueString()})
 	payload := vaultRequestPayload{DisplayName: plan.DisplayName.ValueString(), Metadata: meta}
 	var api vaultAPIModel
 	if err := r.client.Post(ctx, "/v1/vaults", payload, &api); err != nil {
 		resp.Diagnostics.AddError("Create vault failed", err.Error())
 		return
 	}
+	tflog.Debug(ctx, "created vault", map[string]any{"id": api.ID})
 	state, diags := flattenVaultState(ctx, api)
 	resp.Diagnostics.Append(diags...)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
@@ -97,6 +100,7 @@ func (r *vaultResource) Read(ctx context.Context, req resource.ReadRequest, resp
 	if resp.Diagnostics.HasError() {
 		return
 	}
+	tflog.Debug(ctx, "reading vault", map[string]any{"id": state.ID.ValueString()})
 	var api vaultAPIModel
 	if err := r.client.Get(ctx, fmt.Sprintf("/v1/vaults/%s", state.ID.ValueString()), &api); err != nil {
 		var nfe *NotFoundError
@@ -125,12 +129,14 @@ func (r *vaultResource) Update(ctx context.Context, req resource.UpdateRequest, 
 	if resp.Diagnostics.HasError() {
 		return
 	}
+	tflog.Debug(ctx, "updating vault", map[string]any{"id": state.ID.ValueString()})
 	payload := vaultRequestPayload{DisplayName: plan.DisplayName.ValueString(), Metadata: meta}
 	var api vaultAPIModel
 	if err := r.client.Post(ctx, fmt.Sprintf("/v1/vaults/%s", state.ID.ValueString()), payload, &api); err != nil {
 		resp.Diagnostics.AddError("Update vault failed", err.Error())
 		return
 	}
+	tflog.Debug(ctx, "updated vault", map[string]any{"id": api.ID})
 	newState, diags := flattenVaultState(ctx, api)
 	resp.Diagnostics.Append(diags...)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &newState)...)
@@ -142,6 +148,7 @@ func (r *vaultResource) Delete(ctx context.Context, req resource.DeleteRequest, 
 	if resp.Diagnostics.HasError() {
 		return
 	}
+	tflog.Debug(ctx, "deleting vault", map[string]any{"id": state.ID.ValueString()})
 	var err error
 	if r.archiveOnDestroy {
 		err = r.client.Post(ctx, fmt.Sprintf("/v1/vaults/%s/archive", state.ID.ValueString()), map[string]any{}, nil)

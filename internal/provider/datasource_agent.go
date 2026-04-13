@@ -7,6 +7,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	datasourceschema "github.com/hashicorp/terraform-plugin-framework/datasource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/hashicorp/terraform-plugin-log/tflog"
 )
 
 type agentDataSource struct {
@@ -122,6 +123,7 @@ func (d *agentDataSource) Read(ctx context.Context, req datasource.ReadRequest, 
 		return
 	}
 
+	tflog.Debug(ctx, "reading agent data source", map[string]any{"id": config.ID.ValueString()})
 	var api agentAPIModel
 	if err := d.client.Get(ctx, fmt.Sprintf("/v1/agents/%s", config.ID.ValueString()), &api); err != nil {
 		resp.Diagnostics.AddError("Read agent failed", err.Error())

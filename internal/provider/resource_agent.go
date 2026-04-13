@@ -10,6 +10,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
+	"github.com/hashicorp/terraform-plugin-log/tflog"
 	resourceschema "github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
@@ -303,6 +304,7 @@ func (r *agentResource) Create(ctx context.Context, req resource.CreateRequest, 
 	if resp.Diagnostics.HasError() {
 		return
 	}
+	tflog.Debug(ctx, "creating agent", map[string]any{"name": plan.Name.ValueString()})
 	payload, diags := buildAgentPayload(ctx, plan, false)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
@@ -313,6 +315,7 @@ func (r *agentResource) Create(ctx context.Context, req resource.CreateRequest, 
 		resp.Diagnostics.AddError("Create agent failed", err.Error())
 		return
 	}
+	tflog.Debug(ctx, "created agent", map[string]any{"id": api.ID})
 	state, diags := flattenAgentState(ctx, api)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
@@ -327,6 +330,7 @@ func (r *agentResource) Read(ctx context.Context, req resource.ReadRequest, resp
 	if resp.Diagnostics.HasError() {
 		return
 	}
+	tflog.Debug(ctx, "reading agent", map[string]any{"id": state.ID.ValueString()})
 	var api agentAPIModel
 	if err := r.client.Get(ctx, fmt.Sprintf("/v1/agents/%s", state.ID.ValueString()), &api); err != nil {
 		var nfe *NotFoundError
@@ -358,6 +362,7 @@ func (r *agentResource) Update(ctx context.Context, req resource.UpdateRequest, 
 	// surfacing concurrent modifications as errors rather than silently overwriting them.
 	plan.Version = state.Version
 
+	tflog.Debug(ctx, "updating agent", map[string]any{"id": state.ID.ValueString()})
 	payload, diags := buildAgentPayload(ctx, plan, true)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
@@ -368,6 +373,7 @@ func (r *agentResource) Update(ctx context.Context, req resource.UpdateRequest, 
 		resp.Diagnostics.AddError("Update agent failed", err.Error())
 		return
 	}
+	tflog.Debug(ctx, "updated agent", map[string]any{"id": api.ID})
 	newState, diags := flattenAgentState(ctx, api)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
@@ -382,6 +388,7 @@ func (r *agentResource) Delete(ctx context.Context, req resource.DeleteRequest, 
 	if resp.Diagnostics.HasError() {
 		return
 	}
+	tflog.Debug(ctx, "deleting agent", map[string]any{"id": state.ID.ValueString()})
 	// Agents only support archival, not hard-delete via the API.
 	err := r.client.Post(ctx, fmt.Sprintf("/v1/agents/%s/archive", state.ID.ValueString()), map[string]any{}, nil)
 	if err != nil {

@@ -11,6 +11,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
+	"github.com/hashicorp/terraform-plugin-log/tflog"
 	resourceschema "github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
@@ -154,6 +155,7 @@ func (r *vaultCredentialResource) Create(ctx context.Context, req resource.Creat
 	if resp.Diagnostics.HasError() {
 		return
 	}
+	tflog.Debug(ctx, "creating vault credential", map[string]any{"vault_id": plan.VaultID.ValueString()})
 	payload, diags := buildCredentialPayload(ctx, plan)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
@@ -164,6 +166,7 @@ func (r *vaultCredentialResource) Create(ctx context.Context, req resource.Creat
 		resp.Diagnostics.AddError("Create credential failed", err.Error())
 		return
 	}
+	tflog.Debug(ctx, "created vault credential", map[string]any{"id": api.ID})
 	state, diags := flattenCredentialState(ctx, plan, api)
 	resp.Diagnostics.Append(diags...)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
@@ -175,6 +178,7 @@ func (r *vaultCredentialResource) Read(ctx context.Context, req resource.ReadReq
 	if resp.Diagnostics.HasError() {
 		return
 	}
+	tflog.Debug(ctx, "reading vault credential", map[string]any{"id": state.ID.ValueString()})
 	var api credentialAPIModel
 	if err := r.client.Get(ctx, fmt.Sprintf("/v1/vaults/%s/credentials/%s", state.VaultID.ValueString(), state.ID.ValueString()), &api); err != nil {
 		var nfe *NotFoundError
@@ -198,6 +202,7 @@ func (r *vaultCredentialResource) Update(ctx context.Context, req resource.Updat
 	if resp.Diagnostics.HasError() {
 		return
 	}
+	tflog.Debug(ctx, "updating vault credential", map[string]any{"id": state.ID.ValueString()})
 	payload, diags := buildCredentialPayload(ctx, plan)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
@@ -208,6 +213,7 @@ func (r *vaultCredentialResource) Update(ctx context.Context, req resource.Updat
 		resp.Diagnostics.AddError("Update credential failed", err.Error())
 		return
 	}
+	tflog.Debug(ctx, "updated vault credential", map[string]any{"id": api.ID})
 	newState, diags := flattenCredentialState(ctx, plan, api)
 	resp.Diagnostics.Append(diags...)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &newState)...)
@@ -219,6 +225,7 @@ func (r *vaultCredentialResource) Delete(ctx context.Context, req resource.Delet
 	if resp.Diagnostics.HasError() {
 		return
 	}
+	tflog.Debug(ctx, "deleting vault credential", map[string]any{"id": state.ID.ValueString()})
 	var err error
 	if r.archiveOnDestroy {
 		err = r.client.Post(ctx, fmt.Sprintf("/v1/vaults/%s/credentials/%s/archive", state.VaultID.ValueString(), state.ID.ValueString()), map[string]any{}, nil)
