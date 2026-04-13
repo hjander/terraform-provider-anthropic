@@ -32,9 +32,9 @@ locals {
 resource "anthropic_managed_environment" "shared" {
   name = "shared-dev"
 
-  config {
+  config = {
     type = "cloud"
-    networking {
+    networking = {
       type              = "limited"
       allow_mcp_servers = true
       allowed_hosts     = ["api.github.com"]
@@ -50,13 +50,13 @@ resource "anthropic_managed_agent" "team" {
   model_id    = "claude-sonnet-4-6"
   system      = each.value.system
 
-  tools {
+  tools = [{
     type = "agent_toolset_20260401"
-    default_config {
+    default_config = {
       enabled           = true
       permission_policy = "always_allow"
     }
-  }
+  }]
 }
 
 output "agent_ids" {

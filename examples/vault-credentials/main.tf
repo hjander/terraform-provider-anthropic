@@ -24,12 +24,12 @@ resource "anthropic_managed_vault_credential" "github" {
   vault_id     = anthropic_managed_vault.integrations.id
   display_name = "GitHub OAuth"
 
-  auth {
+  auth = {
     type           = "mcp_oauth"
     mcp_server_url = "https://mcp.example.com/github"
     access_token   = var.github_access_token
 
-    refresh {
+    refresh = {
       client_id           = var.github_client_id
       refresh_token       = var.github_refresh_token
       token_endpoint      = "https://github.com/login/oauth/access_token"
@@ -44,7 +44,7 @@ resource "anthropic_managed_vault_credential" "jira" {
   vault_id     = anthropic_managed_vault.integrations.id
   display_name = "Jira OAuth"
 
-  auth {
+  auth = {
     type           = "mcp_oauth"
     mcp_server_url = "https://mcp.example.com/jira"
     access_token   = var.jira_access_token

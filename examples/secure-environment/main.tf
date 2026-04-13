@@ -21,10 +21,10 @@ resource "anthropic_managed_environment" "production" {
     team       = "security"
   }
 
-  config {
+  config = {
     type = "cloud"
 
-    networking {
+    networking = {
       type                   = "limited"
       allow_mcp_servers      = true
       allow_package_managers = false
@@ -36,7 +36,7 @@ resource "anthropic_managed_environment" "production" {
       ]
     }
 
-    packages {
+    packages = {
       type = "packages"
       pip  = ["requests==2.32.3", "pydantic==2.11.0"]
       npm  = ["typescript@5.8.3", "eslint@9.28.0"]

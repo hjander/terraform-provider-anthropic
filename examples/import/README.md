@@ -24,7 +24,7 @@ Vault credentials require both vault ID and credential ID separated by `/`:
 resource "anthropic_managed_vault_credential" "imported" {
   vault_id = "vlt_01JSHGK..."
 
-  auth {
+  auth = {
     type           = "mcp_oauth"
     mcp_server_url = "https://mcp.example.com/service"
     access_token   = var.access_token

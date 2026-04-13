@@ -26,35 +26,35 @@ resource "anthropic_managed_agent" "developer" {
   }
 
   # Built-in toolset with per-tool overrides.
-  tools {
+  tools = [{
     type = "agent_toolset_20260401"
 
-    default_config {
+    default_config = {
       enabled           = true
       permission_policy = "always_ask"
     }
 
-    configs {
-      name              = "bash"
-      enabled           = true
-      permission_policy = "always_allow"
-    }
-
-    configs {
-      name              = "read"
-      enabled           = true
-      permission_policy = "always_allow"
-    }
-
-    configs {
-      name              = "write"
-      enabled           = true
-      permission_policy = "always_ask"
-    }
-  }
+    configs = [
+      {
+        name              = "bash"
+        enabled           = true
+        permission_policy = "always_allow"
+      },
+      {
+        name              = "read"
+        enabled           = true
+        permission_policy = "always_allow"
+      },
+      {
+        name              = "write"
+        enabled           = true
+        permission_policy = "always_ask"
+      },
+    ]
+  },
 
   # Custom tool with JSON Schema input.
-  tools {
+  {
     type        = "custom"
     name        = "deploy"
     description = "Deploy the application to staging or production"
@@ -71,25 +71,25 @@ resource "anthropic_managed_agent" "developer" {
       }
       required = ["environment", "version"]
     })
-  }
+  },
 
   # MCP-connected toolset.
-  mcp_servers {
+  {
+    type            = "mcp_toolset"
+    mcp_server_name = "github-mcp"
+  }]
+
+  mcp_servers = [{
     name = "github-mcp"
     type = "url"
     url  = "https://mcp.example.com/github"
-  }
-
-  tools {
-    type            = "mcp_toolset"
-    mcp_server_name = "github-mcp"
-  }
+  }]
 
   # Anthropic skill.
-  skills {
+  skills = [{
     type     = "anthropic"
     skill_id = "xlsx"
-  }
+  }]
 }
 
 output "agent_id" {

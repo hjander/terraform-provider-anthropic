@@ -13,9 +13,9 @@ provider "anthropic" {}
 resource "anthropic_managed_environment" "sandbox" {
   name = "sandbox"
 
-  config {
+  config = {
     type = "cloud"
-    networking {
+    networking = {
       type = "unrestricted"
     }
   }
