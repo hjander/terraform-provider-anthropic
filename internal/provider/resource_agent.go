@@ -385,6 +385,10 @@ func (r *agentResource) Delete(ctx context.Context, req resource.DeleteRequest, 
 	// Agents only support archival, not hard-delete via the API.
 	err := r.client.Post(ctx, fmt.Sprintf("/v1/agents/%s/archive", state.ID.ValueString()), map[string]any{}, nil)
 	if err != nil {
+		var nfe *NotFoundError
+		if errors.As(err, &nfe) {
+			return // Already gone
+		}
 		resp.Diagnostics.AddError("Delete agent failed", err.Error())
 	}
 }

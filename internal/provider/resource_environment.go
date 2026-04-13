@@ -252,6 +252,10 @@ func (r *environmentResource) Delete(ctx context.Context, req resource.DeleteReq
 		err = r.client.Delete(ctx, fmt.Sprintf("/v1/environments/%s", state.ID.ValueString()))
 	}
 	if err != nil {
+		var nfe *NotFoundError
+		if errors.As(err, &nfe) {
+			return
+		}
 		resp.Diagnostics.AddError("Delete environment failed", err.Error())
 	}
 }

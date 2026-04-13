@@ -226,6 +226,10 @@ func (r *vaultCredentialResource) Delete(ctx context.Context, req resource.Delet
 		err = r.client.Delete(ctx, fmt.Sprintf("/v1/vaults/%s/credentials/%s", state.VaultID.ValueString(), state.ID.ValueString()))
 	}
 	if err != nil {
+		var nfe *NotFoundError
+		if errors.As(err, &nfe) {
+			return
+		}
 		resp.Diagnostics.AddError("Delete credential failed", err.Error())
 	}
 }

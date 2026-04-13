@@ -149,6 +149,10 @@ func (r *vaultResource) Delete(ctx context.Context, req resource.DeleteRequest, 
 		err = r.client.Delete(ctx, fmt.Sprintf("/v1/vaults/%s", state.ID.ValueString()))
 	}
 	if err != nil {
+		var nfe *NotFoundError
+		if errors.As(err, &nfe) {
+			return
+		}
 		resp.Diagnostics.AddError("Delete vault failed", err.Error())
 	}
 }
