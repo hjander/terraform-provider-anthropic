@@ -95,9 +95,9 @@ func (r *environmentResource) Schema(_ context.Context, _ resource.SchemaRequest
 				Computed: true,
 				PlanModifiers: []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
 			},
-			"name":        resourceschema.StringAttribute{Required: true},
-			"description": resourceschema.StringAttribute{Optional: true},
-			"metadata":    resourceschema.MapAttribute{Optional: true, ElementType: types.StringType},
+			"name":        resourceschema.StringAttribute{Required: true, Description: "Display name for the environment."},
+			"description": resourceschema.StringAttribute{Optional: true, Description: "Human-readable description of the environment."},
+			"metadata":    resourceschema.MapAttribute{Optional: true, ElementType: types.StringType, Description: "Arbitrary key-value metadata."},
 			"archived": resourceschema.BoolAttribute{
 				Computed: true,
 				PlanModifiers: []planmodifier.Bool{boolplanmodifier.UseStateForUnknown()},
@@ -368,13 +368,21 @@ func environmentConfigObjectFromAPI(ctx context.Context, cfg *environmentConfigA
 	allowedHosts, d := sliceToSetTF(ctx, cfg.Networking.AllowedHosts)
 	diags.Append(d...)
 
-	allowMCP := types.BoolValue(false)
-	if cfg.Networking.AllowMCPServers != nil {
-		allowMCP = types.BoolValue(*cfg.Networking.AllowMCPServers)
-	}
-	allowPM := types.BoolValue(false)
-	if cfg.Networking.AllowPackageManagers != nil {
-		allowPM = types.BoolValue(*cfg.Networking.AllowPackageManagers)
+	// For unrestricted networking, these booleans are meaningless — use null.
+	// For limited networking, use the API value (defaulting to false if nil).
+	allowMCP := types.BoolNull()
+	allowPM := types.BoolNull()
+	if cfg.Networking.Type == "limited" {
+		if cfg.Networking.AllowMCPServers != nil {
+			allowMCP = types.BoolValue(*cfg.Networking.AllowMCPServers)
+		} else {
+			allowMCP = types.BoolValue(false)
+		}
+		if cfg.Networking.AllowPackageManagers != nil {
+			allowPM = types.BoolValue(*cfg.Networking.AllowPackageManagers)
+		} else {
+			allowPM = types.BoolValue(false)
+		}
 	}
 
 	netObj, d := types.ObjectValue(environmentNetworkingAttrTypes(), map[string]attr.Value{

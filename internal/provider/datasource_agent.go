@@ -2,6 +2,7 @@ package provider
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
@@ -126,6 +127,11 @@ func (d *agentDataSource) Read(ctx context.Context, req datasource.ReadRequest, 
 	tflog.Debug(ctx, "reading agent data source", map[string]any{"id": config.ID.ValueString()})
 	var api agentAPIModel
 	if err := d.client.Get(ctx, fmt.Sprintf("/v1/agents/%s", config.ID.ValueString()), &api); err != nil {
+		var nfe *NotFoundError
+		if errors.As(err, &nfe) {
+			resp.Diagnostics.AddError("Agent not found", fmt.Sprintf("No agent found with ID %s", config.ID.ValueString()))
+			return
+		}
 		resp.Diagnostics.AddError("Read agent failed", err.Error())
 		return
 	}

@@ -2,6 +2,7 @@ package provider
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
@@ -67,6 +68,11 @@ func (d *vaultCredentialDataSource) Read(ctx context.Context, req datasource.Rea
 	tflog.Debug(ctx, "reading vault credential data source", map[string]any{"id": config.ID.ValueString()})
 	var api credentialAPIModel
 	if err := d.client.Get(ctx, fmt.Sprintf("/v1/vaults/%s/credentials/%s", config.VaultID.ValueString(), config.ID.ValueString()), &api); err != nil {
+		var nfe *NotFoundError
+		if errors.As(err, &nfe) {
+			resp.Diagnostics.AddError("Credential not found", fmt.Sprintf("No credential found with ID %s in vault %s", config.ID.ValueString(), config.VaultID.ValueString()))
+			return
+		}
 		resp.Diagnostics.AddError("Read credential failed", err.Error())
 		return
 	}

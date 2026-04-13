@@ -2,6 +2,7 @@ package provider
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
@@ -93,6 +94,11 @@ func (d *environmentDataSource) Read(ctx context.Context, req datasource.ReadReq
 	tflog.Debug(ctx, "reading environment data source", map[string]any{"id": config.ID.ValueString()})
 	var api environmentAPIModel
 	if err := d.client.Get(ctx, fmt.Sprintf("/v1/environments/%s", config.ID.ValueString()), &api); err != nil {
+		var nfe *NotFoundError
+		if errors.As(err, &nfe) {
+			resp.Diagnostics.AddError("Environment not found", fmt.Sprintf("No environment found with ID %s", config.ID.ValueString()))
+			return
+		}
 		resp.Diagnostics.AddError("Read environment failed", err.Error())
 		return
 	}

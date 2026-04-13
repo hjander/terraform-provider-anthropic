@@ -141,8 +141,8 @@ func (r *agentResource) Schema(_ context.Context, _ resource.SchemaRequest, resp
 				Computed: true,
 				PlanModifiers: []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
 			},
-			"name":        resourceschema.StringAttribute{Required: true},
-			"description": resourceschema.StringAttribute{Optional: true},
+			"name":        resourceschema.StringAttribute{Required: true, Description: "Display name for the agent."},
+			"description": resourceschema.StringAttribute{Optional: true, Description: "Human-readable description of the agent's purpose."},
 			"model_id":    resourceschema.StringAttribute{Required: true, Description: "Model identifier, e.g. claude-sonnet-4-6."},
 			"model_speed": resourceschema.StringAttribute{
 				Optional:    true,
@@ -156,7 +156,7 @@ func (r *agentResource) Schema(_ context.Context, _ resource.SchemaRequest, resp
 				Description: "System prompt (up to 100,000 chars).",
 				Validators:  []validator.String{stringvalidator.LengthAtMost(100000)},
 			},
-			"metadata":    resourceschema.MapAttribute{Optional: true, ElementType: types.StringType},
+			"metadata":    resourceschema.MapAttribute{Optional: true, ElementType: types.StringType, Description: "Arbitrary key-value metadata."},
 			"version": resourceschema.Int64Attribute{
 				Computed: true,
 				PlanModifiers: []planmodifier.Int64{int64planmodifier.UseStateForUnknown()},
