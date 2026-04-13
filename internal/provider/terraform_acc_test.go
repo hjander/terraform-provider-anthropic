@@ -100,9 +100,9 @@ func TestAccEnvironment_basic(t *testing.T) {
 				Config: fmt.Sprintf(`
 resource "anthropic_managed_environment" "test" {
   name = %q
-  config {
+  config = {
     type = "cloud"
-    networking {
+    networking = {
       type = "unrestricted"
     }
   }
@@ -124,9 +124,9 @@ resource "anthropic_managed_environment" "test" {
 resource "anthropic_managed_environment" "test" {
   name        = %q
   description = "updated"
-  config {
+  config = {
     type = "cloud"
-    networking {
+    networking = {
       type                   = "limited"
       allow_package_managers = true
     }
@@ -198,18 +198,18 @@ resource "anthropic_managed_agent" "test" {
   name     = %q
   model_id = "claude-sonnet-4-6"
 
-  tools {
+  tools = [{
     type = "agent_toolset_20260401"
-    default_config {
+    default_config = {
       enabled          = true
       permission_policy = "always_allow"
     }
-    configs {
+    configs = [{
       name             = "bash"
       enabled          = true
       permission_policy = "always_allow"
-    }
-  }
+    }]
+  }]
 }`, name),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttrSet("anthropic_managed_agent.test", "id"),
@@ -301,7 +301,7 @@ resource "anthropic_managed_vault" "test" {
 resource "anthropic_managed_vault_credential" "test" {
   vault_id     = anthropic_managed_vault.test.id
   display_name = "test-credential"
-  auth {
+  auth = {
     type           = "mcp_oauth"
     mcp_server_url = "https://mcp.example.com/server"
     access_token   = "test-token-123"
