@@ -32,11 +32,8 @@ func TestMapToTF_ExplicitEmpty(t *testing.T) {
 	if diags.HasError() {
 		t.Fatal(diags)
 	}
-	if m.IsNull() {
-		t.Error("expected non-null for explicit empty map")
-	}
-	if len(m.Elements()) != 0 {
-		t.Errorf("expected 0 elements, got %d", len(m.Elements()))
+	if !m.IsNull() {
+		t.Error("expected null for explicit empty map (normalized to prevent drift)")
 	}
 }
 

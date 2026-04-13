@@ -22,7 +22,7 @@ func mapFromTF(ctx context.Context, in types.Map) (map[string]string, diag.Diagn
 }
 
 func mapToTF(ctx context.Context, in map[string]string) (types.Map, diag.Diagnostics) {
-	if in == nil {
+	if len(in) == 0 {
 		return types.MapNull(types.StringType), nil
 	}
 	return types.MapValueFrom(ctx, types.StringType, in)
