@@ -27,6 +27,19 @@ func TestMapToTF_Empty(t *testing.T) {
 	}
 }
 
+func TestMapToTF_ExplicitEmpty(t *testing.T) {
+	m, diags := mapToTF(context.Background(), map[string]string{})
+	if diags.HasError() {
+		t.Fatal(diags)
+	}
+	if m.IsNull() {
+		t.Error("expected non-null for explicit empty map")
+	}
+	if len(m.Elements()) != 0 {
+		t.Errorf("expected 0 elements, got %d", len(m.Elements()))
+	}
+}
+
 func TestMapRoundTrip(t *testing.T) {
 	ctx := context.Background()
 	input := map[string]string{"a": "1", "b": "2"}
@@ -142,53 +155,5 @@ func TestStringOrNull(t *testing.T) {
 	}
 	if stringOrNull("hello").ValueString() != "hello" {
 		t.Error("expected 'hello'")
-	}
-}
-
-func TestAnyString(t *testing.T) {
-	if anyString(42) != "" {
-		t.Error("expected empty for non-string")
-	}
-	if anyString("hello") != "hello" {
-		t.Error("expected 'hello'")
-	}
-}
-
-func TestAnyBool(t *testing.T) {
-	if anyBool("not-bool") {
-		t.Error("expected false for non-bool")
-	}
-	if !anyBool(true) {
-		t.Error("expected true")
-	}
-}
-
-func TestAnyFloatAsInt64(t *testing.T) {
-	tests := []struct {
-		in   any
-		want int64
-	}{
-		{float64(42), 42},
-		{int64(7), 7},
-		{int(3), 3},
-		{"str", 0},
-	}
-	for _, tt := range tests {
-		got := anyFloatAsInt64(tt.in)
-		if got != tt.want {
-			t.Errorf("anyFloatAsInt64(%v) = %d, want %d", tt.in, got, tt.want)
-		}
-	}
-}
-
-func TestAnySliceToStrings(t *testing.T) {
-	if s := anySliceToStrings(nil); s != nil {
-		t.Errorf("expected nil, got %v", s)
-	}
-	if s := anySliceToStrings([]string{"a"}); len(s) != 1 {
-		t.Errorf("expected [a], got %v", s)
-	}
-	if s := anySliceToStrings([]any{"x", 42, "y"}); len(s) != 2 {
-		t.Errorf("expected [x y], got %v", s)
 	}
 }

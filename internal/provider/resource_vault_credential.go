@@ -12,6 +12,9 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	resourceschema "github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/boolplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
@@ -45,14 +48,6 @@ type credentialRefreshModel struct {
 	TokenEndpoint     types.String `tfsdk:"token_endpoint"`
 	TokenEndpointAuth types.String `tfsdk:"token_endpoint_auth"`
 	Scope             types.String `tfsdk:"scope"`
-}
-
-type credentialAPIModel struct {
-	ID          string            `json:"id"`
-	DisplayName string            `json:"display_name,omitempty"`
-	Metadata    map[string]string `json:"metadata,omitempty"`
-	Auth        map[string]any    `json:"auth,omitempty"`
-	ArchivedAt  *string           `json:"archived_at,omitempty"`
 }
 
 var _ resource.Resource = (*vaultCredentialResource)(nil)
@@ -103,12 +98,26 @@ func (r *vaultCredentialResource) Schema(_ context.Context, _ resource.SchemaReq
 	resp.Schema = resourceschema.Schema{
 		Description: "Vault credential for MCP OAuth or other auth types.",
 		Attributes: map[string]resourceschema.Attribute{
-			"id":              resourceschema.StringAttribute{Computed: true},
-			"vault_id":        resourceschema.StringAttribute{Required: true, Description: "Parent vault ID."},
-			"display_name":    resourceschema.StringAttribute{Optional: true},
-			"metadata":        resourceschema.MapAttribute{Optional: true, ElementType: types.StringType},
-			"credential_type": resourceschema.StringAttribute{Computed: true, Description: "Resolved credential type from auth."},
-			"archived":        resourceschema.BoolAttribute{Computed: true},
+			"id": resourceschema.StringAttribute{
+				Computed: true,
+				PlanModifiers: []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
+			},
+			"vault_id": resourceschema.StringAttribute{
+				Required:    true,
+				Description: "Parent vault ID.",
+				PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()},
+			},
+			"display_name": resourceschema.StringAttribute{Optional: true},
+			"metadata":     resourceschema.MapAttribute{Optional: true, ElementType: types.StringType},
+			"credential_type": resourceschema.StringAttribute{
+				Computed:    true,
+				Description: "Resolved credential type from auth.",
+				PlanModifiers: []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
+			},
+			"archived": resourceschema.BoolAttribute{
+				Computed: true,
+				PlanModifiers: []planmodifier.Bool{boolplanmodifier.UseStateForUnknown()},
+			},
 			"auth": resourceschema.SingleNestedAttribute{
 				Required:  true,
 				Sensitive: true,
@@ -170,7 +179,6 @@ func (r *vaultCredentialResource) Read(ctx context.Context, req resource.ReadReq
 	if err := r.client.Get(ctx, fmt.Sprintf("/v1/vaults/%s/credentials/%s", state.VaultID.ValueString(), state.ID.ValueString()), &api); err != nil {
 		var nfe *NotFoundError
 		if errors.As(err, &nfe) {
-			// Resource was deleted outside Terraform; remove from state.
 			resp.State.RemoveResource(ctx)
 			return
 		}
@@ -223,7 +231,6 @@ func (r *vaultCredentialResource) Delete(ctx context.Context, req resource.Delet
 }
 
 func (r *vaultCredentialResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
-	// Import format: vault_id/credential_id (both required for the API path).
 	parts := strings.SplitN(req.ID, "/", 2)
 	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
 		resp.Diagnostics.AddError("Invalid import ID", "Expected format: vault_id/credential_id")
@@ -233,58 +240,55 @@ func (r *vaultCredentialResource) ImportState(ctx context.Context, req resource.
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), parts[1])...)
 }
 
-func buildCredentialPayload(ctx context.Context, plan vaultCredentialResourceModel) (map[string]any, diag.Diagnostics) {
+func buildCredentialPayload(ctx context.Context, plan vaultCredentialResourceModel) (credentialRequestPayload, diag.Diagnostics) {
 	var diags diag.Diagnostics
 	meta, d := mapFromTF(ctx, plan.Metadata)
 	diags.Append(d...)
 
 	auth := expandCredentialAuth(ctx, plan.Auth, &diags)
-	payload := map[string]any{"auth": auth}
+	payload := credentialRequestPayload{Auth: auth, Metadata: meta}
 	if !plan.DisplayName.IsNull() && !plan.DisplayName.IsUnknown() {
-		payload["display_name"] = plan.DisplayName.ValueString()
-	}
-	if len(meta) > 0 {
-		payload["metadata"] = meta
+		payload.DisplayName = plan.DisplayName.ValueString()
 	}
 	return payload, diags
 }
 
-func expandCredentialAuth(ctx context.Context, obj types.Object, diags *diag.Diagnostics) map[string]any {
+func expandCredentialAuth(ctx context.Context, obj types.Object, diags *diag.Diagnostics) credentialAuthAPI {
 	if obj.IsNull() || obj.IsUnknown() {
-		return nil
+		return credentialAuthAPI{}
 	}
 	var auth credentialAuthModel
 	*diags = append(*diags, obj.As(ctx, &auth, basetypes.ObjectAsOptions{})...)
 
-	result := map[string]any{
-		"type": auth.Type.ValueString(),
+	result := credentialAuthAPI{
+		Type: auth.Type.ValueString(),
 	}
 	if !auth.MCPServerURL.IsNull() && !auth.MCPServerURL.IsUnknown() {
-		result["mcp_server_url"] = auth.MCPServerURL.ValueString()
+		result.MCPServerURL = auth.MCPServerURL.ValueString()
 	}
 	if !auth.AccessToken.IsNull() && !auth.AccessToken.IsUnknown() {
-		result["access_token"] = auth.AccessToken.ValueString()
+		result.AccessToken = auth.AccessToken.ValueString()
 	}
 	if !auth.RefreshConfig.IsNull() && !auth.RefreshConfig.IsUnknown() {
 		var refresh credentialRefreshModel
 		*diags = append(*diags, auth.RefreshConfig.As(ctx, &refresh, basetypes.ObjectAsOptions{})...)
-		r := map[string]any{}
+		r := credentialRefreshAPI{}
 		if !refresh.ClientID.IsNull() && !refresh.ClientID.IsUnknown() {
-			r["client_id"] = refresh.ClientID.ValueString()
+			r.ClientID = refresh.ClientID.ValueString()
 		}
 		if !refresh.RefreshToken.IsNull() && !refresh.RefreshToken.IsUnknown() {
-			r["refresh_token"] = refresh.RefreshToken.ValueString()
+			r.RefreshToken = refresh.RefreshToken.ValueString()
 		}
 		if !refresh.TokenEndpoint.IsNull() && !refresh.TokenEndpoint.IsUnknown() {
-			r["token_endpoint"] = refresh.TokenEndpoint.ValueString()
+			r.TokenEndpoint = refresh.TokenEndpoint.ValueString()
 		}
 		if !refresh.TokenEndpointAuth.IsNull() && !refresh.TokenEndpointAuth.IsUnknown() {
-			r["token_endpoint_auth"] = refresh.TokenEndpointAuth.ValueString()
+			r.TokenEndpointAuth = refresh.TokenEndpointAuth.ValueString()
 		}
 		if !refresh.Scope.IsNull() && !refresh.Scope.IsUnknown() {
-			r["scope"] = refresh.Scope.ValueString()
+			r.Scope = refresh.Scope.ValueString()
 		}
-		result["refresh"] = r
+		result.Refresh = &r
 	}
 	return result
 }
@@ -296,9 +300,9 @@ func flattenCredentialState(ctx context.Context, prior vaultCredentialResourceMo
 		VaultID:        prior.VaultID,
 		DisplayName:    stringOrNull(api.DisplayName),
 		// API does not echo back secrets; preserve auth from prior state to avoid perpetual diff.
-		Auth: prior.Auth,
+		Auth:           prior.Auth,
 		Archived:       types.BoolValue(api.ArchivedAt != nil),
-		CredentialType: stringOrNull(anyString(api.Auth["type"])),
+		CredentialType: stringOrNull(api.Auth.Type),
 	}
 	meta, d := mapToTF(ctx, api.Metadata)
 	diags.Append(d...)

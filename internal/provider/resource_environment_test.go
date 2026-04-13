@@ -45,22 +45,17 @@ func TestExpandEnvironmentPayload_Minimal(t *testing.T) {
 	if diags.HasError() {
 		t.Fatalf("diags: %v", diags)
 	}
-	if payload["name"] != "test-env" {
-		t.Errorf("name=%v", payload["name"])
+	if payload.Name != "test-env" {
+		t.Errorf("name=%v", payload.Name)
 	}
-	cfg, ok := payload["config"].(map[string]any)
-	if !ok {
-		t.Fatalf("config should be map, got %T", payload["config"])
+	if payload.Config == nil {
+		t.Fatal("config should not be nil")
 	}
-	if cfg["type"] != "cloud" {
-		t.Errorf("config.type=%v", cfg["type"])
+	if payload.Config.Type != "cloud" {
+		t.Errorf("config.type=%v", payload.Config.Type)
 	}
-	net, ok := cfg["networking"].(map[string]any)
-	if !ok {
-		t.Fatalf("networking should be map, got %T", cfg["networking"])
-	}
-	if net["type"] != "unrestricted" {
-		t.Errorf("networking.type=%v", net["type"])
+	if payload.Config.Networking.Type != "unrestricted" {
+		t.Errorf("networking.type=%v", payload.Config.Networking.Type)
 	}
 }
 
@@ -68,10 +63,10 @@ func TestFlattenEnvironmentState_Minimal(t *testing.T) {
 	api := environmentAPIModel{
 		ID:   "env_123",
 		Name: "my-env",
-		Config: map[string]any{
-			"type": "cloud",
-			"networking": map[string]any{
-				"type": "unrestricted",
+		Config: &environmentConfigAPI{
+			Type: "cloud",
+			Networking: environmentNetworkingAPI{
+				Type: "unrestricted",
 			},
 		},
 	}
@@ -95,18 +90,18 @@ func TestFlattenEnvironmentState_WithPackages(t *testing.T) {
 	api := environmentAPIModel{
 		ID:   "env_456",
 		Name: "python-env",
-		Config: map[string]any{
-			"type": "cloud",
-			"networking": map[string]any{
-				"type":                   "limited",
-				"allow_mcp_servers":      true,
-				"allow_package_managers": true,
-				"allowed_hosts":          []any{"pypi.org"},
+		Config: &environmentConfigAPI{
+			Type: "cloud",
+			Networking: environmentNetworkingAPI{
+				Type:                 "limited",
+				AllowMCPServers:      true,
+				AllowPackageManagers: true,
+				AllowedHosts:         []string{"pypi.org"},
 			},
-			"packages": map[string]any{
-				"type": "packages",
-				"pip":  []any{"pandas==2.0"},
-				"npm":  []any{"typescript@5"},
+			Packages: &environmentPackagesAPI{
+				Type: "packages",
+				PIP:  []string{"pandas==2.0"},
+				NPM:  []string{"typescript@5"},
 			},
 		},
 	}
@@ -126,10 +121,10 @@ func TestFlattenEnvironmentState_Archived(t *testing.T) {
 		ID:         "env_789",
 		Name:       "env",
 		ArchivedAt: &ts,
-		Config: map[string]any{
-			"type": "cloud",
-			"networking": map[string]any{
-				"type": "unrestricted",
+		Config: &environmentConfigAPI{
+			Type: "cloud",
+			Networking: environmentNetworkingAPI{
+				Type: "unrestricted",
 			},
 		},
 	}

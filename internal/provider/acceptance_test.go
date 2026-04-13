@@ -255,7 +255,7 @@ func TestIntegrationAgent_WithTools(t *testing.T) {
 	if len(agent.Tools) == 0 {
 		t.Error("expected tools to be returned")
 	} else {
-		t.Logf("Agent has %d tool(s), first type=%v", len(agent.Tools), agent.Tools[0]["type"])
+		t.Logf("Agent has %d tool(s), first type=%v", len(agent.Tools), agent.Tools[0].Type)
 	}
 }
 

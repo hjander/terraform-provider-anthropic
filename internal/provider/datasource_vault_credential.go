@@ -77,7 +77,7 @@ func (d *vaultCredentialDataSource) Read(ctx context.Context, req datasource.Rea
 		VaultID:        config.VaultID,
 		DisplayName:    stringOrNull(api.DisplayName),
 		Metadata:       meta,
-		CredentialType: stringOrNull(anyString(api.Auth["type"])),
+		CredentialType: stringOrNull(api.Auth.Type),
 		Archived:       types.BoolValue(api.ArchivedAt != nil),
 	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)

@@ -28,16 +28,16 @@ func TestExpandCredentialAuth_Minimal(t *testing.T) {
 	if diags.HasError() {
 		t.Fatalf("diags: %v", diags)
 	}
-	if result["type"] != "mcp_oauth" {
-		t.Errorf("type=%v", result["type"])
+	if result.Type != "mcp_oauth" {
+		t.Errorf("type=%v", result.Type)
 	}
-	if result["mcp_server_url"] != "https://mcp.example.com" {
-		t.Errorf("mcp_server_url=%v", result["mcp_server_url"])
+	if result.MCPServerURL != "https://mcp.example.com" {
+		t.Errorf("mcp_server_url=%v", result.MCPServerURL)
 	}
-	if result["access_token"] != "token123" {
-		t.Errorf("access_token=%v", result["access_token"])
+	if result.AccessToken != "token123" {
+		t.Errorf("access_token=%v", result.AccessToken)
 	}
-	if _, ok := result["refresh"]; ok {
+	if result.Refresh != nil {
 		t.Error("refresh should not be set when null")
 	}
 }
@@ -71,18 +71,17 @@ func TestExpandCredentialAuth_WithRefresh(t *testing.T) {
 	if diags.HasError() {
 		t.Fatalf("diags: %v", diags)
 	}
-	refresh, ok := result["refresh"].(map[string]any)
-	if !ok {
-		t.Fatalf("refresh should be map, got %T", result["refresh"])
+	if result.Refresh == nil {
+		t.Fatal("refresh should be set")
 	}
-	if refresh["client_id"] != "client_abc" {
-		t.Errorf("client_id=%v", refresh["client_id"])
+	if result.Refresh.ClientID != "client_abc" {
+		t.Errorf("client_id=%v", result.Refresh.ClientID)
 	}
-	if refresh["refresh_token"] != "rt_xyz" {
-		t.Errorf("refresh_token=%v", refresh["refresh_token"])
+	if result.Refresh.RefreshToken != "rt_xyz" {
+		t.Errorf("refresh_token=%v", result.Refresh.RefreshToken)
 	}
-	if refresh["scope"] != "repo read:org" {
-		t.Errorf("scope=%v", refresh["scope"])
+	if result.Refresh.Scope != "repo read:org" {
+		t.Errorf("scope=%v", result.Refresh.Scope)
 	}
 }
 
@@ -92,8 +91,8 @@ func TestExpandCredentialAuth_Null(t *testing.T) {
 	if diags.HasError() {
 		t.Fatalf("diags: %v", diags)
 	}
-	if result != nil {
-		t.Errorf("expected nil, got %v", result)
+	if result.Type != "" {
+		t.Errorf("expected empty auth, got %+v", result)
 	}
 }
 
@@ -113,7 +112,7 @@ func TestFlattenCredentialState(t *testing.T) {
 	api := credentialAPIModel{
 		ID:          "cred_456",
 		DisplayName: "GitHub OAuth",
-		Auth:        map[string]any{"type": "mcp_oauth"},
+		Auth:        credentialAuthAPI{Type: "mcp_oauth"},
 	}
 
 	state, diags := flattenCredentialState(context.Background(), prior, api)
@@ -140,7 +139,7 @@ func TestFlattenCredentialState_Archived(t *testing.T) {
 	api := credentialAPIModel{
 		ID:         "cred_789",
 		ArchivedAt: &ts,
-		Auth:       map[string]any{"type": "mcp_oauth"},
+		Auth:       credentialAuthAPI{Type: "mcp_oauth"},
 	}
 
 	state, diags := flattenCredentialState(context.Background(), prior, api)
@@ -176,15 +175,11 @@ func TestBuildCredentialPayload(t *testing.T) {
 	if diags.HasError() {
 		t.Fatalf("diags: %v", diags)
 	}
-	if payload["display_name"] != "Test Cred" {
-		t.Errorf("display_name=%v", payload["display_name"])
+	if payload.DisplayName != "Test Cred" {
+		t.Errorf("display_name=%v", payload.DisplayName)
 	}
-	auth, ok := payload["auth"].(map[string]any)
-	if !ok {
-		t.Fatalf("auth should be map, got %T", payload["auth"])
-	}
-	if auth["type"] != "mcp_oauth" {
-		t.Errorf("auth.type=%v", auth["type"])
+	if payload.Auth.Type != "mcp_oauth" {
+		t.Errorf("auth.type=%v", payload.Auth.Type)
 	}
 }
 

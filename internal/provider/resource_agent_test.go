@@ -2,6 +2,7 @@ package provider
 
 import (
 	"context"
+	"encoding/json"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-framework/attr"
@@ -26,17 +27,26 @@ func TestBuildAgentPayload_Minimal(t *testing.T) {
 	if diags.HasError() {
 		t.Fatalf("diags: %v", diags)
 	}
-	if payload["name"] != "test-agent" {
-		t.Errorf("name=%v", payload["name"])
+	if payload.Name != "test-agent" {
+		t.Errorf("name=%v", payload.Name)
 	}
-	if payload["model"] != "claude-sonnet-4-6" {
-		t.Errorf("model=%v", payload["model"])
+	if payload.Model.ID != "claude-sonnet-4-6" {
+		t.Errorf("model.id=%v", payload.Model.ID)
 	}
-	if _, ok := payload["version"]; ok {
+	if payload.Model.Speed != "" {
+		t.Errorf("model.speed should be empty, got %v", payload.Model.Speed)
+	}
+	if payload.Version != nil {
 		t.Error("version should not be set")
 	}
-	if _, ok := payload["mcp_servers"]; ok {
-		t.Error("mcp_servers should not be set for null input")
+	if len(payload.MCPServers) != 0 {
+		t.Error("mcp_servers should be empty for null input")
+	}
+
+	// Verify the model serializes as a plain string when speed is empty.
+	b, _ := json.Marshal(payload.Model)
+	if string(b) != `"claude-sonnet-4-6"` {
+		t.Errorf("model should serialize as string, got %s", string(b))
 	}
 }
 
@@ -58,8 +68,8 @@ func TestBuildAgentPayload_WithVersion(t *testing.T) {
 	if diags.HasError() {
 		t.Fatalf("diags: %v", diags)
 	}
-	if payload["version"] != int64(5) {
-		t.Errorf("version=%v, want 5", payload["version"])
+	if payload.Version == nil || *payload.Version != 5 {
+		t.Errorf("version=%v, want 5", payload.Version)
 	}
 }
 
@@ -81,12 +91,14 @@ func TestBuildAgentPayload_ModelSpeed(t *testing.T) {
 	if diags.HasError() {
 		t.Fatalf("diags: %v", diags)
 	}
-	model, ok := payload["model"].(map[string]any)
-	if !ok {
-		t.Fatalf("model should be map, got %T", payload["model"])
+	if payload.Model.ID != "claude-sonnet-4-6" || payload.Model.Speed != "fast" {
+		t.Errorf("model=%+v", payload.Model)
 	}
-	if model["id"] != "claude-sonnet-4-6" || model["speed"] != "fast" {
-		t.Errorf("model=%v", model)
+
+	// Verify the model serializes as an object when speed is set.
+	b, _ := json.Marshal(payload.Model)
+	if string(b) == `"claude-sonnet-4-6"` {
+		t.Error("model should serialize as object when speed is set")
 	}
 }
 
@@ -124,15 +136,11 @@ func TestBuildAgentPayload_WithMCPServers(t *testing.T) {
 	if diags.HasError() {
 		t.Fatalf("diags: %v", diags)
 	}
-	servers, ok := payload["mcp_servers"].([]map[string]any)
-	if !ok {
-		t.Fatalf("mcp_servers should be []map, got %T", payload["mcp_servers"])
+	if len(payload.MCPServers) != 1 {
+		t.Fatalf("expected 1 server, got %d", len(payload.MCPServers))
 	}
-	if len(servers) != 1 {
-		t.Fatalf("expected 1 server, got %d", len(servers))
-	}
-	if servers[0]["name"] != "github" || servers[0]["url"] != "https://mcp.example.com/github" {
-		t.Errorf("server=%v", servers[0])
+	if payload.MCPServers[0].Name != "github" || payload.MCPServers[0].URL != "https://mcp.example.com/github" {
+		t.Errorf("server=%+v", payload.MCPServers[0])
 	}
 }
 
@@ -170,15 +178,14 @@ func TestBuildAgentPayload_WithSkills(t *testing.T) {
 	if diags.HasError() {
 		t.Fatalf("diags: %v", diags)
 	}
-	skills, ok := payload["skills"].([]map[string]any)
-	if !ok {
-		t.Fatalf("skills should be []map, got %T", payload["skills"])
+	if len(payload.Skills) != 1 {
+		t.Fatalf("expected 1 skill, got %d", len(payload.Skills))
 	}
-	if skills[0]["type"] != "anthropic" || skills[0]["skill_id"] != "xlsx" {
-		t.Errorf("skill=%v", skills[0])
+	if payload.Skills[0].Type != "anthropic" || payload.Skills[0].SkillID != "xlsx" {
+		t.Errorf("skill=%+v", payload.Skills[0])
 	}
-	if _, hasVer := skills[0]["version"]; hasVer {
-		t.Error("version should be omitted when null")
+	if payload.Skills[0].Version != "" {
+		t.Error("version should be empty when null")
 	}
 }
 
@@ -242,33 +249,26 @@ func TestBuildAgentPayload_WithTools(t *testing.T) {
 	if diags.HasError() {
 		t.Fatalf("diags: %v", diags)
 	}
-	tools, ok := payload["tools"].([]map[string]any)
-	if !ok {
-		t.Fatalf("tools should be []map, got %T", payload["tools"])
+	if len(payload.Tools) != 1 {
+		t.Fatalf("expected 1 tool, got %d", len(payload.Tools))
 	}
-	if tools[0]["type"] != "agent_toolset_20260401" {
-		t.Errorf("tool type=%v", tools[0]["type"])
+	if payload.Tools[0].Type != "agent_toolset_20260401" {
+		t.Errorf("tool type=%v", payload.Tools[0].Type)
 	}
-	dc, ok := tools[0]["default_config"].(map[string]any)
-	if !ok {
-		t.Fatalf("default_config should be map, got %T", tools[0]["default_config"])
+	if payload.Tools[0].DefaultConfig == nil {
+		t.Fatal("default_config should be set")
 	}
-	if dc["enabled"] != true {
-		t.Errorf("default_config.enabled=%v", dc["enabled"])
+	if payload.Tools[0].DefaultConfig.Enabled == nil || !*payload.Tools[0].DefaultConfig.Enabled {
+		t.Errorf("default_config.enabled=%v", payload.Tools[0].DefaultConfig.Enabled)
 	}
-	dcPP, ok := dc["permission_policy"].(map[string]any)
-	if !ok {
-		t.Fatalf("default_config.permission_policy should be map, got %T", dc["permission_policy"])
+	if payload.Tools[0].DefaultConfig.PermissionPolicy == nil || payload.Tools[0].DefaultConfig.PermissionPolicy.Type != "always_ask" {
+		t.Errorf("default_config.permission_policy=%+v", payload.Tools[0].DefaultConfig.PermissionPolicy)
 	}
-	if dcPP["type"] != "always_ask" {
-		t.Errorf("default_config.permission_policy.type=%v", dcPP["type"])
+	if len(payload.Tools[0].Configs) != 1 {
+		t.Fatalf("configs=%v", payload.Tools[0].Configs)
 	}
-	configs, ok := tools[0]["configs"].([]map[string]any)
-	if !ok || len(configs) != 1 {
-		t.Fatalf("configs=%v", tools[0]["configs"])
-	}
-	if configs[0]["name"] != "read" {
-		t.Errorf("config name=%v", configs[0]["name"])
+	if payload.Tools[0].Configs[0].Name != "read" {
+		t.Errorf("config name=%v", payload.Tools[0].Configs[0].Name)
 	}
 }
 
@@ -276,7 +276,7 @@ func TestFlattenAgentState_Minimal(t *testing.T) {
 	api := agentAPIModel{
 		ID:      "agent_123",
 		Name:    "my-agent",
-		Model:   "claude-sonnet-4-6",
+		Model:   agentModelField{ID: "claude-sonnet-4-6"},
 		Version: 1,
 	}
 
@@ -308,7 +308,7 @@ func TestFlattenAgentState_ObjectModel(t *testing.T) {
 	api := agentAPIModel{
 		ID:      "agent_123",
 		Name:    "agent",
-		Model:   map[string]any{"id": "claude-sonnet-4-6", "speed": "fast"},
+		Model:   agentModelField{ID: "claude-sonnet-4-6", Speed: "fast"},
 		Version: 2,
 	}
 
@@ -328,9 +328,9 @@ func TestFlattenAgentState_WithMCPServers(t *testing.T) {
 	api := agentAPIModel{
 		ID:    "agent_1",
 		Name:  "agent",
-		Model: "claude-sonnet-4-6",
-		MCPServers: []map[string]any{
-			{"name": "github", "type": "url", "url": "https://mcp.example.com"},
+		Model: agentModelField{ID: "claude-sonnet-4-6"},
+		MCPServers: []mcpServerAPI{
+			{Name: "github", Type: "url", URL: "https://mcp.example.com"},
 		},
 		Version: 1,
 	}
@@ -348,22 +348,23 @@ func TestFlattenAgentState_WithMCPServers(t *testing.T) {
 }
 
 func TestFlattenAgentState_WithTools(t *testing.T) {
+	enabled := true
 	api := agentAPIModel{
 		ID:    "agent_1",
 		Name:  "agent",
-		Model: "claude-sonnet-4-6",
-		Tools: []map[string]any{
+		Model: agentModelField{ID: "claude-sonnet-4-6"},
+		Tools: []toolAPI{
 			{
-				"type": "agent_toolset_20260401",
-				"default_config": map[string]any{
-					"enabled":           true,
-					"permission_policy": "always_ask",
+				Type: "agent_toolset_20260401",
+				DefaultConfig: &toolConfigAPI{
+					Enabled:          &enabled,
+					PermissionPolicy: &permissionPolicyAPI{Type: "always_ask"},
 				},
-				"configs": []any{
-					map[string]any{
-						"name":              "read",
-						"enabled":           true,
-						"permission_policy": "always_allow",
+				Configs: []toolConfigAPI{
+					{
+						Name:             "read",
+						Enabled:          &enabled,
+						PermissionPolicy: &permissionPolicyAPI{Type: "always_allow"},
 					},
 				},
 			},
@@ -388,7 +389,7 @@ func TestFlattenAgentState_Archived(t *testing.T) {
 	api := agentAPIModel{
 		ID:         "agent_1",
 		Name:       "agent",
-		Model:      "claude-sonnet-4-6",
+		Model:      agentModelField{ID: "claude-sonnet-4-6"},
 		ArchivedAt: &ts,
 		Version:    1,
 	}
@@ -402,28 +403,49 @@ func TestFlattenAgentState_Archived(t *testing.T) {
 	}
 }
 
-func TestFlattenModel(t *testing.T) {
+func TestAgentModelField_UnmarshalJSON(t *testing.T) {
 	tests := []struct {
 		name      string
-		input     any
+		input     string
 		wantID    string
-		wantSpeed bool
+		wantSpeed string
 	}{
-		{"string", "claude-sonnet-4-6", "claude-sonnet-4-6", false},
-		{"object", map[string]any{"id": "claude-opus-4-6", "speed": "fast"}, "claude-opus-4-6", true},
-		{"nil", nil, "", false},
+		{"string", `"claude-sonnet-4-6"`, "claude-sonnet-4-6", ""},
+		{"object", `{"id":"claude-opus-4-6","speed":"fast"}`, "claude-opus-4-6", "fast"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			id, speed := flattenModel(tt.input)
-			if tt.wantID != "" && id.ValueString() != tt.wantID {
-				t.Errorf("id=%s, want %s", id.ValueString(), tt.wantID)
+			var m agentModelField
+			if err := json.Unmarshal([]byte(tt.input), &m); err != nil {
+				t.Fatalf("unmarshal: %v", err)
 			}
-			if tt.wantSpeed && speed.IsNull() {
-				t.Error("expected speed to be set")
+			if m.ID != tt.wantID {
+				t.Errorf("id=%s, want %s", m.ID, tt.wantID)
 			}
-			if !tt.wantSpeed && !speed.IsNull() {
-				t.Error("expected speed to be null")
+			if m.Speed != tt.wantSpeed {
+				t.Errorf("speed=%s, want %s", m.Speed, tt.wantSpeed)
+			}
+		})
+	}
+}
+
+func TestAgentModelField_MarshalJSON(t *testing.T) {
+	tests := []struct {
+		name  string
+		input agentModelField
+		want  string
+	}{
+		{"string", agentModelField{ID: "claude-sonnet-4-6"}, `"claude-sonnet-4-6"`},
+		{"object", agentModelField{ID: "claude-opus-4-6", Speed: "fast"}, `{"id":"claude-opus-4-6","speed":"fast"}`},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			b, err := json.Marshal(tt.input)
+			if err != nil {
+				t.Fatalf("marshal: %v", err)
+			}
+			if string(b) != tt.want {
+				t.Errorf("got %s, want %s", string(b), tt.want)
 			}
 		})
 	}
@@ -435,16 +457,15 @@ func TestExpandToolConfig(t *testing.T) {
 		Enabled:          types.BoolValue(true),
 		PermissionPolicy: types.StringValue("always_allow"),
 	}
-	m := expandToolConfig(c)
-	if m["name"] != "bash" || m["enabled"] != true {
-		t.Errorf("expandToolConfig=%v", m)
+	cfg := expandToolConfig(c)
+	if cfg.Name != "bash" {
+		t.Errorf("name=%v", cfg.Name)
 	}
-	pp, ok := m["permission_policy"].(map[string]any)
-	if !ok {
-		t.Fatalf("permission_policy should be map, got %T", m["permission_policy"])
+	if cfg.Enabled == nil || !*cfg.Enabled {
+		t.Error("enabled should be true")
 	}
-	if pp["type"] != "always_allow" {
-		t.Errorf("permission_policy.type=%v", pp["type"])
+	if cfg.PermissionPolicy == nil || cfg.PermissionPolicy.Type != "always_allow" {
+		t.Errorf("permission_policy=%+v", cfg.PermissionPolicy)
 	}
 }
 
@@ -454,8 +475,14 @@ func TestExpandToolConfig_Nulls(t *testing.T) {
 		Enabled:          types.BoolNull(),
 		PermissionPolicy: types.StringNull(),
 	}
-	m := expandToolConfig(c)
-	if len(m) != 0 {
-		t.Errorf("expected empty map, got %v", m)
+	cfg := expandToolConfig(c)
+	if cfg.Name != "" {
+		t.Errorf("expected empty name, got %v", cfg.Name)
+	}
+	if cfg.Enabled != nil {
+		t.Errorf("expected nil enabled, got %v", cfg.Enabled)
+	}
+	if cfg.PermissionPolicy != nil {
+		t.Errorf("expected nil permission_policy, got %v", cfg.PermissionPolicy)
 	}
 }
