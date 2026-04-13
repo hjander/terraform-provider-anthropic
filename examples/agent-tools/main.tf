@@ -13,8 +13,7 @@ provider "anthropic" {}
 resource "anthropic_managed_agent" "developer" {
   name        = "developer-agent"
   description = "Full-stack developer with file and bash access"
-  model_id    = "claude-sonnet-4-6"
-  model_speed = "fast"
+  model_id = "claude-sonnet-4-6"
   system      = <<-EOT
     You are a senior software engineer. Write clean, tested code.
     Always explain your reasoning before making changes.
@@ -77,6 +76,10 @@ resource "anthropic_managed_agent" "developer" {
   {
     type            = "mcp_toolset"
     mcp_server_name = "github-mcp"
+    default_config = {
+      enabled           = true
+      permission_policy = "always_ask"
+    }
   }]
 
   mcp_servers = [{
@@ -89,6 +92,7 @@ resource "anthropic_managed_agent" "developer" {
   skills = [{
     type     = "anthropic"
     skill_id = "xlsx"
+    version  = "latest"
   }]
 }
 

@@ -19,7 +19,7 @@ resource "anthropic_managed_vault" "integrations" {
   }
 }
 
-# MCP OAuth credential for GitHub.
+# MCP OAuth credential for GitHub (access token only).
 resource "anthropic_managed_vault_credential" "github" {
   vault_id     = anthropic_managed_vault.integrations.id
   display_name = "GitHub OAuth"
@@ -28,18 +28,10 @@ resource "anthropic_managed_vault_credential" "github" {
     type           = "mcp_oauth"
     mcp_server_url = "https://mcp.example.com/github"
     access_token   = var.github_access_token
-
-    refresh = {
-      client_id           = var.github_client_id
-      refresh_token       = var.github_refresh_token
-      token_endpoint      = "https://github.com/login/oauth/access_token"
-      token_endpoint_auth = "basic"
-      scope               = "repo read:org"
-    }
   }
 }
 
-# Credential without refresh (short-lived token).
+# Another credential for a different integration.
 resource "anthropic_managed_vault_credential" "jira" {
   vault_id     = anthropic_managed_vault.integrations.id
   display_name = "Jira OAuth"
@@ -52,15 +44,6 @@ resource "anthropic_managed_vault_credential" "jira" {
 }
 
 variable "github_access_token" {
-  type      = string
-  sensitive = true
-}
-
-variable "github_client_id" {
-  type = string
-}
-
-variable "github_refresh_token" {
   type      = string
   sensitive = true
 }

@@ -58,6 +58,7 @@ resource "anthropic_managed_agent" "repo_coder" {
     {
       type     = "anthropic"
       skill_id = "xlsx"
+      version  = "latest"
     }
   ]
 
@@ -80,6 +81,14 @@ resource "anthropic_managed_agent" "repo_coder" {
           permission_policy = "always_ask"
         }
       ]
+    },
+    {
+      type            = "mcp_toolset"
+      mcp_server_name = "github"
+      default_config = {
+        enabled           = true
+        permission_policy = "always_ask"
+      }
     }
   ]
 }
@@ -96,13 +105,6 @@ resource "anthropic_managed_vault_credential" "github_oauth" {
     type           = "mcp_oauth"
     mcp_server_url = "https://mcp.example.com/github"
     access_token   = var.github_access_token
-    refresh = {
-      client_id           = var.github_client_id
-      refresh_token       = var.github_refresh_token
-      token_endpoint      = var.github_token_endpoint
-      token_endpoint_auth = "basic"
-      scope               = "repo read:org"
-    }
   }
 }
 
@@ -114,17 +116,4 @@ variable "anthropic_api_key" {
 variable "github_access_token" {
   type      = string
   sensitive = true
-}
-
-variable "github_client_id" {
-  type = string
-}
-
-variable "github_refresh_token" {
-  type      = string
-  sensitive = true
-}
-
-variable "github_token_endpoint" {
-  type = string
 }

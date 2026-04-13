@@ -27,7 +27,7 @@ resource "anthropic_managed_environment" "production" {
     networking = {
       type                   = "limited"
       allow_mcp_servers      = true
-      allow_package_managers = false
+      allow_package_managers = true
       allowed_hosts = [
         "api.github.com",
         "registry.npmjs.org",
