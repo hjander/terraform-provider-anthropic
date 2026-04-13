@@ -15,6 +15,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/boolplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework-validators/listvalidator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -149,7 +150,11 @@ func (r *agentResource) Schema(_ context.Context, _ resource.SchemaRequest, resp
 				Validators:  []validator.String{stringvalidator.OneOf("standard", "fast")},
 				PlanModifiers: []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
 			},
-			"system":      resourceschema.StringAttribute{Optional: true, Description: "System prompt (up to 100,000 chars)."},
+			"system": resourceschema.StringAttribute{
+				Optional:    true,
+				Description: "System prompt (up to 100,000 chars).",
+				Validators:  []validator.String{stringvalidator.LengthAtMost(100000)},
+			},
 			"metadata":    resourceschema.MapAttribute{Optional: true, ElementType: types.StringType},
 			"version": resourceschema.Int64Attribute{
 				Computed: true,
@@ -162,6 +167,7 @@ func (r *agentResource) Schema(_ context.Context, _ resource.SchemaRequest, resp
 			"mcp_servers": resourceschema.ListNestedAttribute{
 				Optional:    true,
 				Description: "MCP server configurations (max 20).",
+				Validators:  []validator.List{listvalidator.SizeAtMost(20)},
 				NestedObject: resourceschema.NestedAttributeObject{
 					Attributes: map[string]resourceschema.Attribute{
 						"name": resourceschema.StringAttribute{Required: true, Description: "Unique MCP server name."},
@@ -177,6 +183,7 @@ func (r *agentResource) Schema(_ context.Context, _ resource.SchemaRequest, resp
 			"skills": resourceschema.ListNestedAttribute{
 				Optional:    true,
 				Description: "Skill configurations (max 20).",
+				Validators:  []validator.List{listvalidator.SizeAtMost(20)},
 				NestedObject: resourceschema.NestedAttributeObject{
 					Attributes: map[string]resourceschema.Attribute{
 						"type": resourceschema.StringAttribute{
@@ -192,6 +199,7 @@ func (r *agentResource) Schema(_ context.Context, _ resource.SchemaRequest, resp
 			"tools": resourceschema.ListNestedAttribute{
 				Optional:    true,
 				Description: "Tool configurations (max 128 tools across all toolsets).",
+				Validators:  []validator.List{listvalidator.SizeAtMost(128)},
 				NestedObject: resourceschema.NestedAttributeObject{
 					Attributes: map[string]resourceschema.Attribute{
 						"type": resourceschema.StringAttribute{
