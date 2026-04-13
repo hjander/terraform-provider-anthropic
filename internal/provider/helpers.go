@@ -22,7 +22,7 @@ func mapFromTF(ctx context.Context, in types.Map) (map[string]string, diag.Diagn
 }
 
 func mapToTF(ctx context.Context, in map[string]string) (types.Map, diag.Diagnostics) {
-	if len(in) == 0 {
+	if in == nil {
 		return types.MapNull(types.StringType), nil
 	}
 	return types.MapValueFrom(ctx, types.StringType, in)
@@ -96,45 +96,4 @@ func stringOrNull(in string) types.String {
 		return types.StringNull()
 	}
 	return types.StringValue(in)
-}
-
-func anyString(v any) string {
-	s, _ := v.(string)
-	return s
-}
-
-func anyBool(v any) bool {
-	b, _ := v.(bool)
-	return b
-}
-
-// JSON numbers from the API decode as float64; this safely converts to int64 for TF Int64Attribute fields.
-func anyFloatAsInt64(v any) int64 {
-	switch t := v.(type) {
-	case float64:
-		return int64(t)
-	case int64:
-		return t
-	case int:
-		return int64(t)
-	default:
-		return 0
-	}
-}
-
-func anySliceToStrings(v any) []string {
-	raw, ok := v.([]any)
-	if !ok {
-		if ss, ok := v.([]string); ok {
-			return ss
-		}
-		return nil
-	}
-	out := make([]string, 0, len(raw))
-	for _, item := range raw {
-		if s, ok := item.(string); ok {
-			out = append(out, s)
-		}
-	}
-	return out
 }
