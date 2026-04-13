@@ -11,6 +11,12 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	resourceschema "github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/boolplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/listplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/objectplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/setplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
@@ -53,15 +59,6 @@ type environmentPackagesModel struct {
 	PIP   types.List   `tfsdk:"pip"`
 }
 
-type environmentAPIModel struct {
-	ID          string            `json:"id"`
-	Name        string            `json:"name"`
-	Description string            `json:"description,omitempty"`
-	Metadata    map[string]string `json:"metadata,omitempty"`
-	Config      map[string]any    `json:"config,omitempty"`
-	ArchivedAt  *string           `json:"archived_at,omitempty"`
-}
-
 var _ resource.Resource = (*environmentResource)(nil)
 var _ resource.ResourceWithImportState = (*environmentResource)(nil)
 
@@ -93,11 +90,17 @@ func (r *environmentResource) Schema(_ context.Context, _ resource.SchemaRequest
 	resp.Schema = resourceschema.Schema{
 		Description: "Managed environment for Anthropic Managed Agents.",
 		Attributes: map[string]resourceschema.Attribute{
-			"id":          resourceschema.StringAttribute{Computed: true},
+			"id": resourceschema.StringAttribute{
+				Computed: true,
+				PlanModifiers: []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
+			},
 			"name":        resourceschema.StringAttribute{Required: true},
 			"description": resourceschema.StringAttribute{Optional: true},
 			"metadata":    resourceschema.MapAttribute{Optional: true, ElementType: types.StringType},
-			"archived":    resourceschema.BoolAttribute{Computed: true},
+			"archived": resourceschema.BoolAttribute{
+				Computed: true,
+				PlanModifiers: []planmodifier.Bool{boolplanmodifier.UseStateForUnknown()},
+			},
 			"config": resourceschema.SingleNestedAttribute{
 				Required: true,
 				Attributes: map[string]resourceschema.Attribute{
@@ -112,25 +115,39 @@ func (r *environmentResource) Schema(_ context.Context, _ resource.SchemaRequest
 								Required:   true,
 								Validators: []validator.String{stringvalidator.OneOf("unrestricted", "limited")},
 							},
-						"allow_mcp_servers":      resourceschema.BoolAttribute{Optional: true, Computed: true},
-						"allow_package_managers": resourceschema.BoolAttribute{Optional: true, Computed: true},
-						"allowed_hosts":          resourceschema.SetAttribute{Optional: true, Computed: true, ElementType: types.StringType},
+						"allow_mcp_servers": resourceschema.BoolAttribute{
+							Optional:      true,
+							Computed:      true,
+							PlanModifiers: []planmodifier.Bool{boolplanmodifier.UseStateForUnknown()},
+						},
+						"allow_package_managers": resourceschema.BoolAttribute{
+							Optional:      true,
+							Computed:      true,
+							PlanModifiers: []planmodifier.Bool{boolplanmodifier.UseStateForUnknown()},
+						},
+						"allowed_hosts": resourceschema.SetAttribute{
+							Optional:      true,
+							Computed:      true,
+							ElementType:   types.StringType,
+							PlanModifiers: []planmodifier.Set{setplanmodifier.UseStateForUnknown()},
+						},
 						},
 					},
 					"packages": resourceschema.SingleNestedAttribute{
-						Optional: true,
-						Computed: true,
+						Optional:      true,
+						Computed:      true,
+						PlanModifiers: []planmodifier.Object{objectplanmodifier.UseStateForUnknown()},
 						Attributes: map[string]resourceschema.Attribute{
 							"type": resourceschema.StringAttribute{
 								Required:   true,
 								Validators: []validator.String{stringvalidator.OneOf("packages")},
 							},
-						"apt":   resourceschema.ListAttribute{Optional: true, Computed: true, ElementType: types.StringType},
-						"cargo": resourceschema.ListAttribute{Optional: true, Computed: true, ElementType: types.StringType},
-						"gem":   resourceschema.ListAttribute{Optional: true, Computed: true, ElementType: types.StringType},
-						"go":    resourceschema.ListAttribute{Optional: true, Computed: true, ElementType: types.StringType},
-						"npm":   resourceschema.ListAttribute{Optional: true, Computed: true, ElementType: types.StringType},
-						"pip":   resourceschema.ListAttribute{Optional: true, Computed: true, ElementType: types.StringType},
+						"apt":   resourceschema.ListAttribute{Optional: true, Computed: true, ElementType: types.StringType, PlanModifiers: []planmodifier.List{listplanmodifier.UseStateForUnknown()}},
+						"cargo": resourceschema.ListAttribute{Optional: true, Computed: true, ElementType: types.StringType, PlanModifiers: []planmodifier.List{listplanmodifier.UseStateForUnknown()}},
+						"gem":   resourceschema.ListAttribute{Optional: true, Computed: true, ElementType: types.StringType, PlanModifiers: []planmodifier.List{listplanmodifier.UseStateForUnknown()}},
+						"go":    resourceschema.ListAttribute{Optional: true, Computed: true, ElementType: types.StringType, PlanModifiers: []planmodifier.List{listplanmodifier.UseStateForUnknown()}},
+						"npm":   resourceschema.ListAttribute{Optional: true, Computed: true, ElementType: types.StringType, PlanModifiers: []planmodifier.List{listplanmodifier.UseStateForUnknown()}},
+						"pip":   resourceschema.ListAttribute{Optional: true, Computed: true, ElementType: types.StringType, PlanModifiers: []planmodifier.List{listplanmodifier.UseStateForUnknown()}},
 						},
 					},
 				},
@@ -177,7 +194,6 @@ func (r *environmentResource) Read(ctx context.Context, req resource.ReadRequest
 	if err := r.client.Get(ctx, fmt.Sprintf("/v1/environments/%s", state.ID.ValueString()), &api); err != nil {
 		var nfe *NotFoundError
 		if errors.As(err, &nfe) {
-			// Resource was deleted outside Terraform; remove from state.
 			resp.State.RemoveResource(ctx)
 			return
 		}
@@ -244,7 +260,7 @@ func (r *environmentResource) ImportState(ctx context.Context, req resource.Impo
 	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
 }
 
-func expandEnvironmentPayload(ctx context.Context, plan environmentResourceModel) (map[string]any, diag.Diagnostics) {
+func expandEnvironmentPayload(ctx context.Context, plan environmentResourceModel) (environmentRequestPayload, diag.Diagnostics) {
 	var diags diag.Diagnostics
 	meta, d := mapFromTF(ctx, plan.Metadata)
 	diags.Append(d...)
@@ -254,54 +270,52 @@ func expandEnvironmentPayload(ctx context.Context, plan environmentResourceModel
 		diags.Append(plan.Config.As(ctx, &cfg, basetypes.ObjectAsOptions{})...)
 	}
 	if diags.HasError() {
-		return nil, diags
+		return environmentRequestPayload{}, diags
 	}
 
 	var net environmentNetworkingModel
 	diags.Append(cfg.Networking.As(ctx, &net, basetypes.ObjectAsOptions{})...)
 	if diags.HasError() {
-		return nil, diags
+		return environmentRequestPayload{}, diags
 	}
 	allowedHosts, d := setFromTF(ctx, net.AllowedHosts)
 	diags.Append(d...)
 
-	netPayload := map[string]any{
-		"type": net.Type.ValueString(),
+	netAPI := environmentNetworkingAPI{
+		Type: net.Type.ValueString(),
 	}
 	if net.Type.ValueString() == "limited" {
-		netPayload["allow_mcp_servers"] = !net.AllowMCPServers.IsNull() && net.AllowMCPServers.ValueBool()
-		netPayload["allow_package_managers"] = !net.AllowPackageManagers.IsNull() && net.AllowPackageManagers.ValueBool()
-		netPayload["allowed_hosts"] = allowedHosts
+		netAPI.AllowMCPServers = !net.AllowMCPServers.IsNull() && net.AllowMCPServers.ValueBool()
+		netAPI.AllowPackageManagers = !net.AllowPackageManagers.IsNull() && net.AllowPackageManagers.ValueBool()
+		netAPI.AllowedHosts = allowedHosts
 	}
 
-	payload := map[string]any{
-		"name": plan.Name.ValueString(),
-		"config": map[string]any{
-			"type":       cfg.Type.ValueString(),
-			"networking": netPayload,
+	payload := environmentRequestPayload{
+		Name:     plan.Name.ValueString(),
+		Metadata: meta,
+		Config: &environmentConfigAPI{
+			Type:       cfg.Type.ValueString(),
+			Networking: netAPI,
 		},
 	}
 	if !plan.Description.IsNull() && !plan.Description.IsUnknown() {
-		payload["description"] = plan.Description.ValueString()
-	}
-	if len(meta) > 0 {
-		payload["metadata"] = meta
+		payload.Description = plan.Description.ValueString()
 	}
 
 	if !cfg.Packages.IsNull() && !cfg.Packages.IsUnknown() {
 		var pkgs environmentPackagesModel
 		diags.Append(cfg.Packages.As(ctx, &pkgs, basetypes.ObjectAsOptions{})...)
 		if diags.HasError() {
-			return nil, diags
+			return environmentRequestPayload{}, diags
 		}
-		payload["config"].(map[string]any)["packages"] = map[string]any{
-			"type":  pkgs.Type.ValueString(),
-			"apt":   listValueStrings(ctx, pkgs.APT, &diags),
-			"cargo": listValueStrings(ctx, pkgs.Cargo, &diags),
-			"gem":   listValueStrings(ctx, pkgs.Gem, &diags),
-			"go":    listValueStrings(ctx, pkgs.Go, &diags),
-			"npm":   listValueStrings(ctx, pkgs.NPM, &diags),
-			"pip":   listValueStrings(ctx, pkgs.PIP, &diags),
+		payload.Config.Packages = &environmentPackagesAPI{
+			Type:  pkgs.Type.ValueString(),
+			APT:   listValueStrings(ctx, pkgs.APT, &diags),
+			Cargo: listValueStrings(ctx, pkgs.Cargo, &diags),
+			Gem:   listValueStrings(ctx, pkgs.Gem, &diags),
+			Go:    listValueStrings(ctx, pkgs.Go, &diags),
+			NPM:   listValueStrings(ctx, pkgs.NPM, &diags),
+			PIP:   listValueStrings(ctx, pkgs.PIP, &diags),
 		}
 	}
 
@@ -327,46 +341,45 @@ func flattenEnvironmentState(ctx context.Context, api environmentAPIModel) (envi
 	return state, diags
 }
 
-func environmentConfigObjectFromAPI(ctx context.Context, cfg map[string]any) (types.Object, diag.Diagnostics) {
+func environmentConfigObjectFromAPI(ctx context.Context, cfg *environmentConfigAPI) (types.Object, diag.Diagnostics) {
 	var diags diag.Diagnostics
+	configObjType := map[string]attr.Type{
+		"type":       types.StringType,
+		"networking": types.ObjectType{AttrTypes: environmentNetworkingAttrTypes()},
+		"packages":   types.ObjectType{AttrTypes: environmentPackagesAttrTypes()},
+	}
 	if cfg == nil {
-		return types.ObjectNull(map[string]attr.Type{
-			"type":       types.StringType,
-			"networking": types.ObjectType{AttrTypes: environmentNetworkingAttrTypes()},
-			"packages":   types.ObjectType{AttrTypes: environmentPackagesAttrTypes()},
-		}), diags
+		return types.ObjectNull(configObjType), diags
 	}
 
-	netMap, _ := cfg["networking"].(map[string]any)
-	pkgMap, _ := cfg["packages"].(map[string]any)
-	allowedHosts, d := sliceToSetTF(ctx, anySliceToStrings(netMap["allowed_hosts"]))
+	allowedHosts, d := sliceToSetTF(ctx, cfg.Networking.AllowedHosts)
 	diags.Append(d...)
 
 	netObj, d := types.ObjectValue(environmentNetworkingAttrTypes(), map[string]attr.Value{
-		"type":                   stringOrNull(anyString(netMap["type"])),
-		"allow_mcp_servers":      types.BoolValue(anyBool(netMap["allow_mcp_servers"])),
-		"allow_package_managers": types.BoolValue(anyBool(netMap["allow_package_managers"])),
+		"type":                   stringOrNull(cfg.Networking.Type),
+		"allow_mcp_servers":      types.BoolValue(cfg.Networking.AllowMCPServers),
+		"allow_package_managers": types.BoolValue(cfg.Networking.AllowPackageManagers),
 		"allowed_hosts":          allowedHosts,
 	})
 	diags.Append(d...)
 
 	pkgObj := types.ObjectNull(environmentPackagesAttrTypes())
-	if pkgMap != nil {
+	if cfg.Packages != nil {
 		var aptList, cargoList, gemList, goList, npmList, pipList types.List
-		aptList, d = listFromStrings(anySliceToStrings(pkgMap["apt"]))
+		aptList, d = listFromStrings(cfg.Packages.APT)
 		diags.Append(d...)
-		cargoList, d = listFromStrings(anySliceToStrings(pkgMap["cargo"]))
+		cargoList, d = listFromStrings(cfg.Packages.Cargo)
 		diags.Append(d...)
-		gemList, d = listFromStrings(anySliceToStrings(pkgMap["gem"]))
+		gemList, d = listFromStrings(cfg.Packages.Gem)
 		diags.Append(d...)
-		goList, d = listFromStrings(anySliceToStrings(pkgMap["go"]))
+		goList, d = listFromStrings(cfg.Packages.Go)
 		diags.Append(d...)
-		npmList, d = listFromStrings(anySliceToStrings(pkgMap["npm"]))
+		npmList, d = listFromStrings(cfg.Packages.NPM)
 		diags.Append(d...)
-		pipList, d = listFromStrings(anySliceToStrings(pkgMap["pip"]))
+		pipList, d = listFromStrings(cfg.Packages.PIP)
 		diags.Append(d...)
 		pkgObj, d = types.ObjectValue(environmentPackagesAttrTypes(), map[string]attr.Value{
-			"type":  stringOrNull(anyString(pkgMap["type"])),
+			"type":  stringOrNull(cfg.Packages.Type),
 			"apt":   aptList,
 			"cargo": cargoList,
 			"gem":   gemList,
@@ -377,12 +390,8 @@ func environmentConfigObjectFromAPI(ctx context.Context, cfg map[string]any) (ty
 		diags.Append(d...)
 	}
 
-	obj, d := types.ObjectValue(map[string]attr.Type{
-		"type":       types.StringType,
-		"networking": types.ObjectType{AttrTypes: environmentNetworkingAttrTypes()},
-		"packages":   types.ObjectType{AttrTypes: environmentPackagesAttrTypes()},
-	}, map[string]attr.Value{
-		"type":       stringOrNull(anyString(cfg["type"])),
+	obj, d := types.ObjectValue(configObjType, map[string]attr.Value{
+		"type":       stringOrNull(cfg.Type),
 		"networking": netObj,
 		"packages":   pkgObj,
 	})
