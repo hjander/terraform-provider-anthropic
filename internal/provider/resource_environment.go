@@ -16,7 +16,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/boolplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/listplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/objectplanmodifier"
-	"github.com/hashicorp/terraform-plugin-framework/resource/schema/setplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -117,20 +116,17 @@ func (r *environmentResource) Schema(_ context.Context, _ resource.SchemaRequest
 								Validators: []validator.String{stringvalidator.OneOf("unrestricted", "limited")},
 							},
 						"allow_mcp_servers": resourceschema.BoolAttribute{
-							Optional:      true,
-							Computed:      true,
-							PlanModifiers: []planmodifier.Bool{boolplanmodifier.UseStateForUnknown()},
+							Optional: true,
+							Computed: true,
 						},
 						"allow_package_managers": resourceschema.BoolAttribute{
-							Optional:      true,
-							Computed:      true,
-							PlanModifiers: []planmodifier.Bool{boolplanmodifier.UseStateForUnknown()},
+							Optional: true,
+							Computed: true,
 						},
 						"allowed_hosts": resourceschema.SetAttribute{
-							Optional:      true,
-							Computed:      true,
-							ElementType:   types.StringType,
-							PlanModifiers: []planmodifier.Set{setplanmodifier.UseStateForUnknown()},
+							Optional:    true,
+							Computed:    true,
+							ElementType: types.StringType,
 						},
 						},
 					},
@@ -368,21 +364,13 @@ func environmentConfigObjectFromAPI(ctx context.Context, cfg *environmentConfigA
 	allowedHosts, d := sliceToSetTF(ctx, cfg.Networking.AllowedHosts)
 	diags.Append(d...)
 
-	// For unrestricted networking, these booleans are meaningless — use null.
-	// For limited networking, use the API value (defaulting to false if nil).
-	allowMCP := types.BoolNull()
-	allowPM := types.BoolNull()
-	if cfg.Networking.Type == "limited" {
-		if cfg.Networking.AllowMCPServers != nil {
-			allowMCP = types.BoolValue(*cfg.Networking.AllowMCPServers)
-		} else {
-			allowMCP = types.BoolValue(false)
-		}
-		if cfg.Networking.AllowPackageManagers != nil {
-			allowPM = types.BoolValue(*cfg.Networking.AllowPackageManagers)
-		} else {
-			allowPM = types.BoolValue(false)
-		}
+	allowMCP := types.BoolValue(false)
+	if cfg.Networking.AllowMCPServers != nil {
+		allowMCP = types.BoolValue(*cfg.Networking.AllowMCPServers)
+	}
+	allowPM := types.BoolValue(false)
+	if cfg.Networking.AllowPackageManagers != nil {
+		allowPM = types.BoolValue(*cfg.Networking.AllowPackageManagers)
 	}
 
 	netObj, d := types.ObjectValue(environmentNetworkingAttrTypes(), map[string]attr.Value{
