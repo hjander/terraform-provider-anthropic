@@ -223,6 +223,27 @@ resource "anthropic_managed_agent" "test" {
 
 // ---------- Vault ----------
 
+func testAccCheckVaultCredentialDestroy(s *terraform.State) error {
+	c := NewClient(ClientConfig{
+		BaseURL:           "https://api.anthropic.com",
+		APIKey:            os.Getenv("ANTHROPIC_API_KEY"),
+		AnthropicVersion:  defaultAnthropicVer,
+		ManagedAgentsBeta: defaultManagedAgents,
+	})
+	for _, rs := range s.RootModule().Resources {
+		if rs.Type != "anthropic_managed_vault_credential" {
+			continue
+		}
+		vaultID := rs.Primary.Attributes["vault_id"]
+		var cred credentialAPIModel
+		err := c.Get(context.Background(), fmt.Sprintf("/v1/vaults/%s/credentials/%s", vaultID, rs.Primary.ID), &cred)
+		if err == nil && cred.ArchivedAt == nil {
+			return fmt.Errorf("credential %s still exists and is not archived", rs.Primary.ID)
+		}
+	}
+	return nil
+}
+
 func TestAccVault_basic(t *testing.T) {
 	skipUnlessTerraformAcc(t)
 	name := testAccUniqueName("vault")
@@ -259,3 +280,40 @@ resource "anthropic_managed_vault" "test" {
 	})
 }
 
+// ---------- Vault Credential ----------
+
+func TestAccVaultCredential_basic(t *testing.T) {
+	skipUnlessTerraformAcc(t)
+	vaultName := testAccUniqueName("vault")
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckVaultCredentialDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config: fmt.Sprintf(`
+provider "anthropic" {}
+
+resource "anthropic_managed_vault" "test" {
+  display_name = %q
+}
+
+resource "anthropic_managed_vault_credential" "test" {
+  vault_id     = anthropic_managed_vault.test.id
+  display_name = "test-credential"
+  auth {
+    type           = "mcp_oauth"
+    mcp_server_url = "https://mcp.example.com/server"
+    access_token   = "test-token-123"
+  }
+}
+`, vaultName),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttrSet("anthropic_managed_vault_credential.test", "id"),
+					resource.TestCheckResourceAttr("anthropic_managed_vault_credential.test", "display_name", "test-credential"),
+					resource.TestCheckResourceAttr("anthropic_managed_vault_credential.test", "credential_type", "mcp_oauth"),
+				),
+			},
+		},
+	})
+}
