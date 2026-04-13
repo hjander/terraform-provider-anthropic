@@ -9,6 +9,9 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	resourceschema "github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/boolplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
@@ -22,13 +25,6 @@ type vaultResourceModel struct {
 	DisplayName types.String `tfsdk:"display_name"`
 	Metadata    types.Map    `tfsdk:"metadata"`
 	Archived    types.Bool   `tfsdk:"archived"`
-}
-
-type vaultAPIModel struct {
-	ID          string            `json:"id"`
-	DisplayName string            `json:"display_name"`
-	Metadata    map[string]string `json:"metadata,omitempty"`
-	ArchivedAt  *string           `json:"archived_at,omitempty"`
 }
 
 var _ resource.Resource = (*vaultResource)(nil)
@@ -57,11 +53,19 @@ func (r *vaultResource) Configure(_ context.Context, req resource.ConfigureReque
 }
 
 func (r *vaultResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
-	resp.Schema = resourceschema.Schema{Attributes: map[string]resourceschema.Attribute{
-		"id":           resourceschema.StringAttribute{Computed: true},
+	resp.Schema = resourceschema.Schema{
+		Description: "Vault for storing credentials used by managed agents.",
+		Attributes: map[string]resourceschema.Attribute{
+		"id": resourceschema.StringAttribute{
+			Computed: true,
+			PlanModifiers: []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
+		},
 		"display_name": resourceschema.StringAttribute{Required: true},
 		"metadata":     resourceschema.MapAttribute{Optional: true, ElementType: types.StringType},
-		"archived":     resourceschema.BoolAttribute{Computed: true},
+		"archived": resourceschema.BoolAttribute{
+			Computed: true,
+			PlanModifiers: []planmodifier.Bool{boolplanmodifier.UseStateForUnknown()},
+		},
 	}}
 }
 
@@ -76,10 +80,7 @@ func (r *vaultResource) Create(ctx context.Context, req resource.CreateRequest, 
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	payload := map[string]any{"display_name": plan.DisplayName.ValueString()}
-	if len(meta) > 0 {
-		payload["metadata"] = meta
-	}
+	payload := vaultRequestPayload{DisplayName: plan.DisplayName.ValueString(), Metadata: meta}
 	var api vaultAPIModel
 	if err := r.client.Post(ctx, "/v1/vaults", payload, &api); err != nil {
 		resp.Diagnostics.AddError("Create vault failed", err.Error())
@@ -100,7 +101,6 @@ func (r *vaultResource) Read(ctx context.Context, req resource.ReadRequest, resp
 	if err := r.client.Get(ctx, fmt.Sprintf("/v1/vaults/%s", state.ID.ValueString()), &api); err != nil {
 		var nfe *NotFoundError
 		if errors.As(err, &nfe) {
-			// Resource was deleted outside Terraform; remove from state.
 			resp.State.RemoveResource(ctx)
 			return
 		}
@@ -125,10 +125,7 @@ func (r *vaultResource) Update(ctx context.Context, req resource.UpdateRequest, 
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	payload := map[string]any{"display_name": plan.DisplayName.ValueString()}
-	if len(meta) > 0 {
-		payload["metadata"] = meta
-	}
+	payload := vaultRequestPayload{DisplayName: plan.DisplayName.ValueString(), Metadata: meta}
 	var api vaultAPIModel
 	if err := r.client.Post(ctx, fmt.Sprintf("/v1/vaults/%s", state.ID.ValueString()), payload, &api); err != nil {
 		resp.Diagnostics.AddError("Update vault failed", err.Error())
