@@ -1,5 +1,19 @@
 # Terraform Provider for Anthropic Managed Agents
 
+> ## ⚠️ BETA / PROOF OF CONCEPT
+>
+> **This is an unofficial, experimental Terraform provider — a proof of concept only.**
+>
+> - **NOT affiliated with or endorsed by Anthropic.**
+> - **NOT production-ready.** Expect breaking changes, bugs, and missing features.
+> - **NOT published to the Terraform Registry.** Install it manually (see below).
+> - The underlying Anthropic Managed Agents API is itself in beta (`anthropic-beta: managed-agents-2026-04-01`) and subject to change.
+> - Use at your own risk. Do not manage production credentials or workloads with this provider.
+>
+> **Purpose:** exploring what a first-class Terraform integration for Claude Managed Agents could look like. Feedback welcome via GitHub issues.
+
+---
+
 Terraform provider for the [Anthropic Claude Managed Agents](https://platform.claude.com/docs/en/managed-agents/overview) API, built on the [Terraform Plugin Framework](https://developer.hashicorp.com/terraform/plugin/framework).
 
 All resource schemas use **strongly-typed nested attributes** — no raw JSON strings except `input_schema` on custom tools (arbitrary JSON Schema).
@@ -474,9 +488,9 @@ These use `terraform-plugin-testing` and go through the full Terraform plan/appl
 ```hcl
 resource "anthropic_managed_environment" "sandbox" {
   name = "sandbox"
-  config {
+  config = {
     type = "cloud"
-    networking { type = "unrestricted" }
+    networking = { type = "unrestricted" }
   }
 }
 
@@ -493,7 +507,7 @@ resource "anthropic_managed_agent" "deployer" {
   name     = "deployer"
   model_id = "claude-sonnet-4-6"
 
-  tools {
+  tools = [{
     type        = "custom"
     name        = "deploy"
     description = "Deploy to staging or production"
@@ -505,7 +519,7 @@ resource "anthropic_managed_agent" "deployer" {
       }
       required = ["environment", "version"]
     })
-  }
+  }]
 }
 ```
 
