@@ -1,26 +1,13 @@
 # Terraform Provider for Anthropic Managed Agents
 
-> # 🧪 HOBBY PROJECT
+> **Hobby project. Not official Anthropic. Beta / early stage / proof of concept.**
 >
-> # 🚫 NOT OFFICIAL ANTHROPIC
->
-> # ⚠️ BETA · EARLY STAGE · PROOF OF CONCEPT
->
-> ---
->
-> **This is a personal hobby project built for fun.**
-> **It is NOT an official Anthropic product.**
-> **It is in early-stage, experimental, proof-of-concept status.**
->
-> - 🚫 **UNOFFICIAL.** Not affiliated with, endorsed by, or supported by Anthropic in any way.
-> - 🧪 **HOBBY PROJECT.** Built in spare time for exploration and learning.
-> - 🏗️ **EARLY STAGE / BETA / POC.** Not production-ready. Expect breaking changes, bugs, and missing features.
-> - 📦 **NOT published to the Terraform Registry.** Install manually (see below).
-> - 🧬 The underlying Anthropic Managed Agents API is itself in beta (`anthropic-beta: managed-agents-2026-04-01`) and subject to change.
-> - ⚠️ Use at your own risk. Do **not** manage production credentials or workloads with this provider.
-> - 💬 No support, no SLA, no warranty. Issues and PRs welcome, but responses are best-effort.
->
-> **Purpose:** exploring what a first-class Terraform integration for Claude Managed Agents could look like. Purely a weekend experiment.
+> - Unofficial. Not affiliated with, endorsed by, or supported by Anthropic.
+> - Built as a personal experiment; not production-ready.
+> - Expect breaking changes, bugs, and missing features.
+> - Not published to the Terraform Registry — install manually (see below).
+> - The underlying Anthropic Managed Agents API is itself in beta (`anthropic-beta: managed-agents-2026-04-01`) and subject to change.
+> - Use at your own risk. No support, no SLA, no warranty.
 
 ---
 
